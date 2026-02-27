@@ -219,7 +219,7 @@ class WsManagerApp {
         printCommandEntry("log",      "Show recent commits across all repositories")
         println()
         println(c.bold("  GIT COMMANDS:"))
-        printCommandEntry("checkout", "Checkout a branch across all repositories")
+        printCommandEntry("checkout", "Checkout a branch across all repositories (--default for per-repo default)")
         printCommandEntry("pull", "Pull from remote across all repositories")
         printCommandEntry("push", "Push to remote across all repositories")
         printCommandEntry("fetch", "Fetch from remote across all repositories")
