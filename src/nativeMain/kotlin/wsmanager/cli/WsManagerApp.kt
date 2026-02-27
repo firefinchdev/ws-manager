@@ -21,6 +21,7 @@ class WsManagerApp {
         InitCommand(),
         CloneCommand(),
         SyncCommand(),
+        RefreshCommand(),
         StatusCommand(),
         DescribeCommand(),
         CheckoutCommand(),
@@ -214,6 +215,7 @@ class WsManagerApp {
         printCommandEntry("describe", "Describe the workspace config and all repositories")
         printCommandEntry("clone",    "Clone all repositories in the workspace")
         printCommandEntry("sync",     "Clone missing repos and update existing ones")
+        printCommandEntry("refresh",  "Clean state + pull latest (new-task workflow)")
         printCommandEntry("status",   "Show status of all repositories")
         printCommandEntry("foreach",  "Execute a command in each repository")
         printCommandEntry("log",      "Show recent commits across all repositories")

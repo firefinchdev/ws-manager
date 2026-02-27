@@ -90,6 +90,20 @@ interface GitOperations {
     /** Check if a directory is a git repository. */
     fun isGitRepository(repoPath: String): Boolean
 
+    /**
+     * Discard all local changes (staged + unstaged) to tracked files.
+     * Equivalent to `git reset --hard HEAD`.
+     * Does NOT remove untracked files — use [cleanUntracked] for that.
+     */
+    fun discardChanges(repoPath: String): GitResult
+
+    /**
+     * Remove all untracked files and directories from the working tree.
+     * Equivalent to `git clean -fd`.
+     * This is destructive — use with care.
+     */
+    fun cleanUntracked(repoPath: String): GitResult
+
     // --- Stash Operations ---
 
     /** Stash current changes. */

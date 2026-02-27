@@ -204,6 +204,14 @@ class GitCommandExecutor : GitOperations {
         return result.success && result.output.trim() == "true"
     }
 
+    override fun discardChanges(repoPath: String): GitResult {
+        return git(repoPath, "reset", "--hard", "HEAD")
+    }
+
+    override fun cleanUntracked(repoPath: String): GitResult {
+        return git(repoPath, "clean", "-fd")
+    }
+
     // --- Stash Operations ---
 
     override fun stash(repoPath: String, message: String?): GitResult {
