@@ -20,8 +20,10 @@
 - [Commands](#commands)
   - [Workspace Commands](#workspace-commands)
     - [init](#init)
+    - [describe](#describe)
     - [clone](#clone)
     - [sync](#sync)
+    - [refresh](#refresh)
     - [status](#status)
     - [foreach](#foreach)
     - [log](#log)
@@ -54,6 +56,9 @@
 - **Intelligent Git handling** &mdash; auto-creates tracking branches, handles multiple remotes
 - **JSON configuration** with strict validation before execution
 - **Workspace auto-discovery** &mdash; finds `workspace.json` by walking up the directory tree, just like `git` finds `.git`
+- **`describe`** &mdash; inspect the full workspace config: repos, remotes, clone status, all in one view
+- **`refresh`** &mdash; one-command "clean slate" for starting a new task: discard changes, checkout default branches, sync remotes, pull latest
+- **`checkout --default`** &mdash; each repo checks out its own configured default branch
 - **Colored terminal output** with progress indicators and structured summaries
 - **Shell command execution** across all repos via `foreach`
 - **Cross-platform** &mdash; compiles to native binary for macOS, Linux, and Windows
@@ -96,20 +101,26 @@ ws-manager init --name my-project
 # 3. Clone all repositories
 ws-manager clone
 
-# 4. Check status across all repos
+# 4. Inspect the workspace — repos, remotes, clone status
+ws-manager describe
+
+# 5. Check status across all repos
 ws-manager status
 
-# 5. Create a feature branch across all repos
+# 6. Create a feature branch across all repos
 ws-manager checkout feature/my-feature --create
 
-# 6. Pull latest changes
+# 7. Pull latest changes
 ws-manager pull --rebase
 
-# 7. Run tests across all repos
+# 8. Run tests across all repos
 ws-manager foreach -- make test
 
-# 8. Push changes
+# 9. Push changes
 ws-manager push --set-upstream
+
+# 10. Done with the feature? Reset everything to a clean baseline
+ws-manager refresh
 ```
 
 ---
@@ -304,6 +315,36 @@ ws-manager init --name my-platform
 
 ---
 
+#### describe
+
+Describe the full workspace configuration — all settings, repositories, remotes, and local clone status.
+
+```
+ws-manager describe [--json]
+```
+
+| Option | Description |
+|---|---|
+| `--json` | Print the raw `workspace.json` content (useful for scripting/piping) |
+
+**Strategy:** n/a (read-only, no git operations)
+
+Displays:
+- **Workspace settings** &mdash; config file path (absolute), workspace root, max concurrency, repository count
+- **Per-repository detail** &mdash; relative path, resolved absolute path, default branch, default remote, all remotes with their URLs
+- **Clone status** per repo &mdash; `cloned` (green), `directory exists (not a git repo)` (yellow), or `not cloned` (red)
+- **Summary line** &mdash; totals at the bottom (e.g., `3 cloned | 1 not cloned`)
+
+```bash
+# Human-readable workspace overview
+ws-manager describe
+
+# Raw JSON (pipe to jq, etc.)
+ws-manager describe --json | jq '.repositories[].name'
+```
+
+---
+
 #### clone
 
 Clone all repositories defined in the workspace configuration.
@@ -346,6 +387,51 @@ For each repository:
 ```bash
 # Sync all repos, using rebase for existing
 ws-manager sync --rebase
+```
+
+---
+
+#### refresh
+
+Reset every repository to a clean, up-to-date state. Designed for the **"start a new task"** developer workflow.
+
+```
+ws-manager refresh [--clean-untracked]
+```
+
+| Option | Description |
+|---|---|
+| `--clean-untracked` | Also remove untracked files and directories (`git clean -fd`) |
+
+**Strategy:** BEST_EFFORT
+
+For each **existing** repository, executes these steps in order:
+
+| # | Step | Git equivalent |
+|---|---|---|
+| 1 | Discard staged + unstaged changes to tracked files | `git reset --hard HEAD` |
+| 2 | *(optional)* Remove untracked files and dirs | `git clean -fd` |
+| 3 | Checkout this repo's own `default_branch` | `git checkout <defaultBranch>` |
+| 4 | Sync remotes against config: add missing, remove extra, update changed URLs | `git remote add/remove/set-url` |
+| 5 | Fetch all remotes, prune deleted remote-tracking branches | `git fetch --all --prune` |
+| 6 | Pull from default remote on default branch | `git pull <defaultRemote> <defaultBranch>` |
+
+For each **missing** repository, clones it from the default remote (same as `clone`).
+
+Each repository's success line shows a compact per-step summary:
+
+```
+✓ api-gateway — success  changes discarded  ·  on main  ·  remotes: +1 remote  ·  Already up to date.
+```
+
+> **Note:** Step 1 (`git reset --hard HEAD`) removes staged and unstaged changes to tracked files but does **not** remove untracked files. Add `--clean-untracked` to also wipe those.
+
+```bash
+# Standard refresh: discard changes, checkout defaults, sync remotes, pull
+ws-manager refresh
+
+# Also remove untracked build artifacts, generated files, etc.
+ws-manager refresh --clean-untracked
 ```
 
 ---
@@ -435,20 +521,25 @@ ws-manager log --count 10
 Checkout a branch across all repositories.
 
 ```
-ws-manager checkout <branch> [--create]
+ws-manager checkout <branch> [--create|-b]
+ws-manager checkout --default|-d
 ```
 
 | Option | Short | Description |
 |---|---|---|
 | `--create` | `-b` | Create the branch before checking out |
+| `--default` | `-d` | Checkout each repo's own `default_branch` (no branch name argument needed) |
 
 **Strategy:** ATOMIC
 
 - If the branch exists locally, checks it out
 - If the branch doesn't exist locally but exists on the default remote, creates a tracking branch
 - If `--create` is specified, creates the branch at current HEAD first
+- `--default` and `--create` cannot be combined
 
 **Rollback on failure:** Checks out the previous branch. If `--create` was used, also deletes the newly created branch.
+
+##### Checkout a named branch
 
 ```bash
 # Checkout existing branch across all repos
@@ -457,6 +548,20 @@ ws-manager checkout develop
 # Create and checkout a new feature branch across all repos
 ws-manager checkout feature/auth-v2 --create
 ```
+
+##### Checkout each repo's default branch
+
+Each repository checks out its own `default_branch` as declared in `workspace.json`. Repos with different defaults (e.g. `main` vs `develop`) each get the right branch independently.
+
+```bash
+# All repos return to their configured default branch
+ws-manager checkout --default
+
+# Short form
+ws-manager checkout -d
+```
+
+This is useful after finishing work on a feature branch and wanting to return every repo to its baseline without remembering which branch each one uses.
 
 ---
 
@@ -760,7 +865,7 @@ Every operation uses one of two execution strategies. The strategy determines ho
 
 ### BEST_EFFORT Strategy
 
-**Used for:** clone, sync, status, pull, fetch, log, foreach, branch list, remote operations, stash list, stash drop
+**Used for:** clone, sync, refresh, status, pull, fetch, log, foreach, branch list, remote operations, stash list, stash drop
 
 **Behavior:**
 
@@ -806,10 +911,12 @@ src/nativeMain/kotlin/wsmanager/
 │   ├── WsManagerApp.kt              # CLI dispatcher, global option parsing
 │   ├── commands/
 │   │   ├── InitCommand.kt           # Initialize workspace config
+│   │   ├── DescribeCommand.kt       # Describe workspace config + clone status
 │   │   ├── CloneCommand.kt          # Clone all repositories
 │   │   ├── SyncCommand.kt           # Clone missing + update existing
+│   │   ├── RefreshCommand.kt        # Clean slate + pull latest (new-task workflow)
 │   │   ├── StatusCommand.kt         # Show workspace status
-│   │   ├── CheckoutCommand.kt       # Checkout branch (ATOMIC)
+│   │   ├── CheckoutCommand.kt       # Checkout branch / default branch (ATOMIC)
 │   │   ├── PullCommand.kt           # Pull from remote
 │   │   ├── PushCommand.kt           # Push to remote (ATOMIC)
 │   │   ├── FetchCommand.kt          # Fetch from remote
@@ -901,11 +1008,27 @@ ws-manager clone
 ws-manager status
 ```
 
+### Starting a new task (clean slate)
+
+After completing a feature, use `refresh` to instantly put every repo in a clean, up-to-date state ready for the next task:
+
+```bash
+# Discard all local changes, checkout each repo's default branch,
+# sync remotes, and pull the latest — all in one command
+ws-manager refresh
+
+# If you also want untracked build artifacts removed
+ws-manager refresh --clean-untracked
+```
+
 ### Daily development
 
 ```bash
 # Start the day: sync everything
 ws-manager sync --rebase
+
+# Check workspace configuration at a glance
+ws-manager describe
 
 # Create a feature branch across all repos
 ws-manager checkout feature/payment-v2 --create
@@ -922,6 +1045,9 @@ ws-manager checkout hotfix/login-fix
 # Come back and restore work
 ws-manager checkout feature/payment-v2
 ws-manager stash pop
+
+# Return all repos to their individual default branches
+ws-manager checkout --default
 ```
 
 ### Preparing a release
