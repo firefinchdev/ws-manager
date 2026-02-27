@@ -1,5 +1,6 @@
 package wsmanager.cli
 
+import wsmanager.BuildConfig
 import wsmanager.cli.commands.*
 import wsmanager.cli.output.Printer
 import wsmanager.cli.output.TerminalColors
@@ -67,7 +68,7 @@ class WsManagerApp {
 
         // Check for version
         if (globalArgs.contains("--version") || globalArgs.contains("-v")) {
-            println("ws-manager version 1.0.0")
+            println("ws-manager version ${BuildConfig.VERSION}")
             return 0
         }
 
