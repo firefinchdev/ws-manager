@@ -12,7 +12,7 @@ import wsmanager.util.FileUtils
 class RemoteCommand : Command {
     override val name = "remote"
     override val description = "Remote management across all repositories"
-    override val usage = "ws-manager remote [list|add|remove|set-url] [--name <name>] [--url <url>]"
+    override val usage = "ws remote [list|add|remove|set-url] [--name <name>] [--url <url>]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

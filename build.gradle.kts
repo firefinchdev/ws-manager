@@ -73,7 +73,7 @@ kotlin {
         binaries {
             executable {
                 entryPoint = "wsmanager.main"
-                baseName = "ws-manager"
+                baseName = "ws"
             }
         }
         compilations["main"].compileTaskProvider.configure {

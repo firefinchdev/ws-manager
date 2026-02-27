@@ -13,7 +13,7 @@ import wsmanager.util.FileUtils
 class RebaseCommand : Command {
     override val name = "rebase"
     override val description = "Rebase current branch onto a target across all repositories"
-    override val usage = "ws-manager rebase <onto-branch>"
+    override val usage = "ws rebase <onto-branch>"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

@@ -12,7 +12,7 @@ import wsmanager.util.FileUtils
 class StatusCommand : Command {
     override val name = "status"
     override val description = "Show status of all repositories"
-    override val usage = "ws-manager status"
+    override val usage = "ws status"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

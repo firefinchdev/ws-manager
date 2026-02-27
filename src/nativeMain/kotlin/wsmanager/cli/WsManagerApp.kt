@@ -68,7 +68,7 @@ class WsManagerApp {
 
         // Check for version
         if (globalArgs.contains("--version") || globalArgs.contains("-v")) {
-            println("ws-manager version ${BuildConfig.VERSION}")
+            println("ws version ${BuildConfig.VERSION}")
             return 0
         }
 
@@ -82,7 +82,7 @@ class WsManagerApp {
         val command = commands[commandName]
         if (command == null) {
             Printer.error("Unknown command: '$commandName'")
-            Printer.info("Run 'ws-manager --help' for available commands.")
+            Printer.info("Run 'ws --help' for available commands.")
             return 1
         }
 
@@ -94,7 +94,7 @@ class WsManagerApp {
             try {
                 if (!FileUtils.exists(configPath)) {
                     Printer.error("Configuration file not found: $configPath")
-                    Printer.info("Run 'ws-manager init' to create one, or use '--config <path>' to specify a custom path.")
+                    Printer.info("Run 'ws init' to create one, or use '--config <path>' to specify a custom path.")
                     return 1
                 }
 
@@ -205,11 +205,11 @@ class WsManagerApp {
     private fun printHelp() {
         val c = TerminalColors
         println()
-        println(c.boldCyan("  ws-manager") + " — Multi-Repository Workspace Manager")
+        println(c.boldCyan("  ws") + " — Multi-Repository Workspace Manager")
         println(c.dim("  Manage multiple Git repositories as a single workspace"))
         println()
         println(c.bold("  USAGE:"))
-        println("    ws-manager ${c.cyan("<command>")} [options]")
+        println("    ws ${c.cyan("<command>")} [options]")
         println()
         println(c.bold("  WORKSPACE COMMANDS:"))
         printCommandEntry("init",     "Initialize a new workspace configuration")
@@ -238,7 +238,7 @@ class WsManagerApp {
         println("    ${c.cyan("--help, -h")}             Show help")
         println("    ${c.cyan("--version, -v")}          Show version")
         println()
-        println(c.dim("  Run 'ws-manager <command> --help' for command-specific help."))
+        println(c.dim("  Run 'ws <command> --help' for command-specific help."))
         println()
     }
 

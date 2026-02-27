@@ -12,7 +12,7 @@ import wsmanager.util.FileUtils
 class FetchCommand : Command {
     override val name = "fetch"
     override val description = "Fetch from remote across all repositories"
-    override val usage = "ws-manager fetch [--remote <remote>] [--prune]"
+    override val usage = "ws fetch [--remote <remote>] [--prune]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

@@ -26,7 +26,7 @@ import wsmanager.util.FileUtils
 class RefreshCommand : Command {
     override val name = "refresh"
     override val description = "Clean state + pull latest across all repos (new-task workflow)"
-    override val usage = "ws-manager refresh [--clean-untracked]"
+    override val usage = "ws refresh [--clean-untracked]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

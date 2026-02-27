@@ -11,9 +11,9 @@ import wsmanager.cli.WsManagerApp
 import kotlin.system.exitProcess
 
 /**
- * Entry point for the ws-manager CLI tool.
+ * Entry point for the ws CLI tool.
  *
- * ws-manager is a multi-repository workspace management tool that enables
+ * ws is a multi-repository workspace management tool that enables
  * developers to manage multiple Git repositories as a single logical workspace.
  *
  * Features:

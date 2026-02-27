@@ -13,7 +13,7 @@ import wsmanager.util.FileUtils
 class StashCommand : Command {
     override val name = "stash"
     override val description = "Stash operations across all repositories"
-    override val usage = "ws-manager stash [push|pop|list|drop] [--message <msg>]"
+    override val usage = "ws stash [push|pop|list|drop] [--message <msg>]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

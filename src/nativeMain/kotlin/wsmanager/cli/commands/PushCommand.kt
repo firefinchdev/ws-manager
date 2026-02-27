@@ -13,7 +13,7 @@ import wsmanager.util.FileUtils
 class PushCommand : Command {
     override val name = "push"
     override val description = "Push to remote across all repositories"
-    override val usage = "ws-manager push [--remote <remote>] [--force] [--set-upstream]"
+    override val usage = "ws push [--remote <remote>] [--force] [--set-upstream]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

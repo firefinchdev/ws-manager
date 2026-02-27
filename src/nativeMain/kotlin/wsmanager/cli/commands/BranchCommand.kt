@@ -15,7 +15,7 @@ import wsmanager.util.FileUtils
 class BranchCommand : Command {
     override val name = "branch"
     override val description = "Branch management across all repositories"
-    override val usage = "ws-manager branch [<name>] [--create] [--delete] [--force] [--all]"
+    override val usage = "ws branch [<name>] [--create] [--delete] [--force] [--all]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

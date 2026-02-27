@@ -2,7 +2,7 @@
 
 **Multi-Repository Workspace Manager CLI** &mdash; Manage multiple Git repositories as a single logical workspace.
 
-`ws-manager` is a Kotlin Native CLI tool that enables developers to execute Git operations across many repositories simultaneously, with parallel execution, atomic rollback guarantees, and structured terminal output.
+`ws` is a Kotlin Native CLI tool that enables developers to execute Git operations across many repositories simultaneously, with parallel execution, atomic rollback guarantees, and structured terminal output.
 
 ---
 
@@ -79,13 +79,13 @@ cd ws-manager
 ```
 
 The binary is produced at:
-- **Release**: `build/bin/native/releaseExecutable/ws-manager.kexe`
-- **Debug**: `build/bin/native/debugExecutable/ws-manager.kexe`
+- **Release**: `build/bin/native/releaseExecutable/ws.kexe`
+- **Debug**: `build/bin/native/debugExecutable/ws.kexe`
 
 Copy the binary to a location on your `$PATH`:
 
 ```bash
-cp build/bin/native/releaseExecutable/ws-manager.kexe /usr/local/bin/ws-manager
+cp build/bin/native/releaseExecutable/ws.kexe /usr/local/bin/ws
 ```
 
 ---
@@ -94,33 +94,33 @@ cp build/bin/native/releaseExecutable/ws-manager.kexe /usr/local/bin/ws-manager
 
 ```bash
 # 1. Initialize a new workspace
-ws-manager init --name my-project
+ws init --name my-project
 
 # 2. Edit workspace.json to add your repositories (see Configuration below)
 
 # 3. Clone all repositories
-ws-manager clone
+ws clone
 
 # 4. Inspect the workspace — repos, remotes, clone status
-ws-manager describe
+ws describe
 
 # 5. Check status across all repos
-ws-manager status
+ws status
 
 # 6. Create a feature branch across all repos
-ws-manager checkout feature/my-feature --create
+ws checkout feature/my-feature --create
 
 # 7. Pull latest changes
-ws-manager pull --rebase
+ws pull --rebase
 
 # 8. Run tests across all repos
-ws-manager foreach -- make test
+ws foreach -- make test
 
 # 9. Push changes
-ws-manager push --set-upstream
+ws push --set-upstream
 
 # 10. Done with the feature? Reset everything to a clean baseline
-ws-manager refresh
+ws refresh
 ```
 
 ---
@@ -129,7 +129,7 @@ ws-manager refresh
 
 ### Configuration File Format
 
-`ws-manager` uses a JSON configuration file (default: `workspace.json` in the current directory).
+`ws` uses a JSON configuration file (default: `workspace.json` in the current directory).
 
 ```json
 {
@@ -233,22 +233,22 @@ These options apply to all commands and must be placed before the command name:
 
 ```bash
 # Use a custom config file
-ws-manager -c ~/projects/workspace.json status
+ws -c ~/projects/workspace.json status
 
 # Override concurrency to 8 parallel operations
-ws-manager -j 8 fetch --prune
+ws -j 8 fetch --prune
 
 # Get help for a specific command
-ws-manager checkout --help
+ws checkout --help
 ```
 
 ---
 
 ## Workspace Auto-Discovery
 
-When `--config` is not provided, `ws-manager` discovers the nearest `workspace.json` by walking **up** the directory tree from the current working directory — exactly the same way `git` discovers the `.git` directory.
+When `--config` is not provided, `ws` discovers the nearest `workspace.json` by walking **up** the directory tree from the current working directory — exactly the same way `git` discovers the `.git` directory.
 
-This means you can run `ws-manager` from **anywhere inside your workspace**, including deep inside one of the managed repositories, and it will always find the right config.
+This means you can run `ws` from **anywhere inside your workspace**, including deep inside one of the managed repositories, and it will always find the right config.
 
 ### How it works
 
@@ -265,7 +265,7 @@ Given this directory structure:
     shared-libs/
 ```
 
-Running `ws-manager status` from `~/projects/my-platform/api-gateway/src/controllers/auth/` will:
+Running `ws status` from `~/projects/my-platform/api-gateway/src/controllers/auth/` will:
 
 1. Check `auth/workspace.json` — not found
 2. Check `controllers/workspace.json` — not found
@@ -286,7 +286,7 @@ No hint is shown when you run from the workspace root itself (the config is in t
 You can always bypass discovery and point to a specific config:
 
 ```bash
-ws-manager -c /path/to/other/workspace.json status
+ws -c /path/to/other/workspace.json status
 ```
 
 ---
@@ -300,7 +300,7 @@ ws-manager -c /path/to/other/workspace.json status
 Initialize a new workspace configuration file.
 
 ```
-ws-manager init [--name <name>]
+ws init [--name <name>]
 ```
 
 | Option | Description |
@@ -310,7 +310,7 @@ ws-manager init [--name <name>]
 Creates a `workspace.json` file with a sample repository entry. Edit this file to define your actual repositories before running other commands.
 
 ```bash
-ws-manager init --name my-platform
+ws init --name my-platform
 ```
 
 ---
@@ -320,7 +320,7 @@ ws-manager init --name my-platform
 Describe the full workspace configuration — all settings, repositories, remotes, and local clone status.
 
 ```
-ws-manager describe [--json]
+ws describe [--json]
 ```
 
 | Option | Description |
@@ -337,10 +337,10 @@ Displays:
 
 ```bash
 # Human-readable workspace overview
-ws-manager describe
+ws describe
 
 # Raw JSON (pipe to jq, etc.)
-ws-manager describe --json | jq '.repositories[].name'
+ws describe --json | jq '.repositories[].name'
 ```
 
 ---
@@ -350,7 +350,7 @@ ws-manager describe --json | jq '.repositories[].name'
 Clone all repositories defined in the workspace configuration.
 
 ```
-ws-manager clone
+ws clone
 ```
 
 **Strategy:** BEST_EFFORT
@@ -361,7 +361,7 @@ ws-manager clone
 - Adds any additional remotes defined in the config after cloning
 
 ```bash
-ws-manager clone
+ws clone
 ```
 
 ---
@@ -371,7 +371,7 @@ ws-manager clone
 Synchronize the workspace: clone missing repositories and update existing ones.
 
 ```
-ws-manager sync [--rebase]
+ws sync [--rebase]
 ```
 
 | Option | Description |
@@ -386,7 +386,7 @@ For each repository:
 
 ```bash
 # Sync all repos, using rebase for existing
-ws-manager sync --rebase
+ws sync --rebase
 ```
 
 ---
@@ -396,7 +396,7 @@ ws-manager sync --rebase
 Reset every repository to a clean, up-to-date state. Designed for the **"start a new task"** developer workflow.
 
 ```
-ws-manager refresh [--clean-untracked]
+ws refresh [--clean-untracked]
 ```
 
 | Option | Description |
@@ -428,10 +428,10 @@ Each repository's success line shows a compact per-step summary:
 
 ```bash
 # Standard refresh: discard changes, checkout defaults, sync remotes, pull
-ws-manager refresh
+ws refresh
 
 # Also remove untracked build artifacts, generated files, etc.
-ws-manager refresh --clean-untracked
+ws refresh --clean-untracked
 ```
 
 ---
@@ -441,7 +441,7 @@ ws-manager refresh --clean-untracked
 Show the status of all repositories in the workspace.
 
 ```
-ws-manager status
+ws status
 ```
 
 Displays per-repository:
@@ -456,7 +456,7 @@ Output uses Git's short status format with color-coded indicators:
 - Gray: untracked files
 
 ```bash
-ws-manager status
+ws status
 ```
 
 ---
@@ -466,7 +466,7 @@ ws-manager status
 Execute an arbitrary shell command inside each repository's directory.
 
 ```
-ws-manager foreach -- <command>
+ws foreach -- <command>
 ```
 
 **Strategy:** BEST_EFFORT
@@ -479,16 +479,16 @@ ws-manager foreach -- <command>
 
 ```bash
 # Run tests across all repos
-ws-manager foreach -- npm test
+ws foreach -- npm test
 
 # Check Go module versions
-ws-manager foreach -- go version
+ws foreach -- go version
 
 # Custom build script
-ws-manager foreach -- make build
+ws foreach -- make build
 
-# Git command not covered by ws-manager
-ws-manager foreach -- git stash show -p
+# Git command not covered by ws
+ws foreach -- git stash show -p
 ```
 
 ---
@@ -498,7 +498,7 @@ ws-manager foreach -- git stash show -p
 Show recent commits across all repositories.
 
 ```
-ws-manager log [--count <n>]
+ws log [--count <n>]
 ```
 
 | Option | Description |
@@ -509,7 +509,7 @@ ws-manager log [--count <n>]
 
 ```bash
 # Show last 10 commits per repo
-ws-manager log --count 10
+ws log --count 10
 ```
 
 ---
@@ -521,8 +521,8 @@ ws-manager log --count 10
 Checkout a branch across all repositories.
 
 ```
-ws-manager checkout <branch> [--create|-b]
-ws-manager checkout --default|-d
+ws checkout <branch> [--create|-b]
+ws checkout --default|-d
 ```
 
 | Option | Short | Description |
@@ -543,10 +543,10 @@ ws-manager checkout --default|-d
 
 ```bash
 # Checkout existing branch across all repos
-ws-manager checkout develop
+ws checkout develop
 
 # Create and checkout a new feature branch across all repos
-ws-manager checkout feature/auth-v2 --create
+ws checkout feature/auth-v2 --create
 ```
 
 ##### Checkout each repo's default branch
@@ -555,10 +555,10 @@ Each repository checks out its own `default_branch` as declared in `workspace.js
 
 ```bash
 # All repos return to their configured default branch
-ws-manager checkout --default
+ws checkout --default
 
 # Short form
-ws-manager checkout -d
+ws checkout -d
 ```
 
 This is useful after finishing work on a feature branch and wanting to return every repo to its baseline without remembering which branch each one uses.
@@ -570,7 +570,7 @@ This is useful after finishing work on a feature branch and wanting to return ev
 Pull from remote across all repositories.
 
 ```
-ws-manager pull [--rebase] [--remote <remote>]
+ws pull [--rebase] [--remote <remote>]
 ```
 
 | Option | Description |
@@ -582,10 +582,10 @@ ws-manager pull [--rebase] [--remote <remote>]
 
 ```bash
 # Pull with rebase from default remotes
-ws-manager pull --rebase
+ws pull --rebase
 
 # Pull from upstream remote
-ws-manager pull --remote upstream
+ws pull --remote upstream
 ```
 
 ---
@@ -595,7 +595,7 @@ ws-manager pull --remote upstream
 Push to remote across all repositories.
 
 ```
-ws-manager push [--remote <remote>] [--force] [--set-upstream]
+ws push [--remote <remote>] [--force] [--set-upstream]
 ```
 
 | Option | Short | Description |
@@ -612,13 +612,13 @@ ws-manager push [--remote <remote>] [--force] [--set-upstream]
 
 ```bash
 # Push all repos to default remote
-ws-manager push
+ws push
 
 # Push and set upstream tracking
-ws-manager push --set-upstream
+ws push --set-upstream
 
 # Force push with lease
-ws-manager push --force
+ws push --force
 ```
 
 ---
@@ -628,7 +628,7 @@ ws-manager push --force
 Fetch from remote across all repositories.
 
 ```
-ws-manager fetch [--remote <remote>] [--prune]
+ws fetch [--remote <remote>] [--prune]
 ```
 
 | Option | Description |
@@ -640,10 +640,10 @@ ws-manager fetch [--remote <remote>] [--prune]
 
 ```bash
 # Fetch all with prune
-ws-manager fetch --prune
+ws fetch --prune
 
 # Fetch from a specific remote
-ws-manager fetch --remote upstream
+ws fetch --remote upstream
 ```
 
 ---
@@ -653,7 +653,7 @@ ws-manager fetch --remote upstream
 Merge a branch into the current branch across all repositories.
 
 ```
-ws-manager merge <branch> [--no-ff] [--message <msg>]
+ws merge <branch> [--no-ff] [--message <msg>]
 ```
 
 | Option | Short | Description |
@@ -667,10 +667,10 @@ ws-manager merge <branch> [--no-ff] [--message <msg>]
 
 ```bash
 # Merge develop into current branch
-ws-manager merge develop
+ws merge develop
 
 # Merge with no-ff and custom message
-ws-manager merge feature/auth --no-ff --message "Merge auth feature"
+ws merge feature/auth --no-ff --message "Merge auth feature"
 ```
 
 ---
@@ -680,7 +680,7 @@ ws-manager merge feature/auth --no-ff --message "Merge auth feature"
 Rebase the current branch onto a target branch across all repositories.
 
 ```
-ws-manager rebase <onto-branch>
+ws rebase <onto-branch>
 ```
 
 **Strategy:** ATOMIC
@@ -689,7 +689,7 @@ ws-manager rebase <onto-branch>
 
 ```bash
 # Rebase onto main
-ws-manager rebase main
+ws rebase main
 ```
 
 ---
@@ -699,17 +699,17 @@ ws-manager rebase main
 Branch management across all repositories. Supports listing, creating, and deleting branches.
 
 ```
-ws-manager branch [<name>] [--create] [--delete] [--force] [--all]
+ws branch [<name>] [--create] [--delete] [--force] [--all]
 ```
 
 ##### List branches
 
 ```bash
 # List local branches across all repos
-ws-manager branch
+ws branch
 
 # List all branches (including remote-tracking)
-ws-manager branch --all
+ws branch --all
 ```
 
 **Strategy:** BEST_EFFORT
@@ -717,7 +717,7 @@ ws-manager branch --all
 ##### Create a branch
 
 ```bash
-ws-manager branch feature/new-api --create
+ws branch feature/new-api --create
 ```
 
 | Option | Short | Description |
@@ -732,10 +732,10 @@ ws-manager branch feature/new-api --create
 
 ```bash
 # Safe delete (only if fully merged)
-ws-manager branch feature/old --delete
+ws branch feature/old --delete
 
 # Force delete
-ws-manager branch feature/old --delete --force
+ws branch feature/old --delete --force
 ```
 
 | Option | Short | Description |
@@ -754,35 +754,35 @@ ws-manager branch feature/old --delete --force
 Remote management across all repositories. Supports listing, adding, removing, and updating remotes.
 
 ```
-ws-manager remote [list|add|remove|set-url] [options]
+ws remote [list|add|remove|set-url] [options]
 ```
 
 ##### List remotes
 
 ```bash
 # List remote names
-ws-manager remote list
+ws remote list
 
 # List remotes with URLs
-ws-manager remote list --verbose
+ws remote list --verbose
 ```
 
 ##### Add a remote
 
 ```bash
-ws-manager remote add --name upstream --url git@github.com:upstream/project.git
+ws remote add --name upstream --url git@github.com:upstream/project.git
 ```
 
 ##### Remove a remote
 
 ```bash
-ws-manager remote remove --name upstream
+ws remote remove --name upstream
 ```
 
 ##### Set remote URL
 
 ```bash
-ws-manager remote set-url --name origin --url git@github.com:neworg/project.git
+ws remote set-url --name origin --url git@github.com:neworg/project.git
 ```
 
 All remote subcommands use **BEST_EFFORT** strategy.
@@ -794,17 +794,17 @@ All remote subcommands use **BEST_EFFORT** strategy.
 Stash operations across all repositories. Supports push, pop, list, and drop.
 
 ```
-ws-manager stash [push|pop|list|drop] [options]
+ws stash [push|pop|list|drop] [options]
 ```
 
 ##### Stash push (save changes)
 
 ```bash
 # Stash all changes
-ws-manager stash push
+ws stash push
 
 # Stash with a message
-ws-manager stash push --message "WIP: auth changes"
+ws stash push --message "WIP: auth changes"
 ```
 
 **Strategy:** ATOMIC
@@ -814,7 +814,7 @@ Skips clean repositories (no changes to stash). On failure, pops the stash from 
 ##### Stash pop (restore changes)
 
 ```bash
-ws-manager stash pop
+ws stash pop
 ```
 
 **Strategy:** ATOMIC
@@ -824,7 +824,7 @@ Skips repos with no stash entries. On failure, re-stashes changes in repos where
 ##### Stash list
 
 ```bash
-ws-manager stash list
+ws stash list
 ```
 
 **Strategy:** BEST_EFFORT
@@ -833,10 +833,10 @@ ws-manager stash list
 
 ```bash
 # Drop the latest stash entry
-ws-manager stash drop
+ws stash drop
 
 # Drop a specific stash entry
-ws-manager stash drop --index 2
+ws stash drop --index 2
 ```
 
 **Strategy:** BEST_EFFORT
@@ -985,8 +985,8 @@ src/nativeMain/kotlin/wsmanager/
 
 | Build Type | Path |
 |---|---|
-| Debug | `build/bin/native/debugExecutable/ws-manager.kexe` |
-| Release | `build/bin/native/releaseExecutable/ws-manager.kexe` |
+| Debug | `build/bin/native/debugExecutable/ws.kexe` |
+| Release | `build/bin/native/releaseExecutable/ws.kexe` |
 
 ---
 
@@ -996,16 +996,16 @@ src/nativeMain/kotlin/wsmanager/
 
 ```bash
 # Create workspace config
-ws-manager init --name platform-services
+ws init --name platform-services
 
 # Edit workspace.json to add all your repos
 # (See Configuration section above)
 
 # Clone everything
-ws-manager clone
+ws clone
 
 # Verify all repos are set up
-ws-manager status
+ws status
 ```
 
 ### Starting a new task (clean slate)
@@ -1015,76 +1015,76 @@ After completing a feature, use `refresh` to instantly put every repo in a clean
 ```bash
 # Discard all local changes, checkout each repo's default branch,
 # sync remotes, and pull the latest — all in one command
-ws-manager refresh
+ws refresh
 
 # If you also want untracked build artifacts removed
-ws-manager refresh --clean-untracked
+ws refresh --clean-untracked
 ```
 
 ### Daily development
 
 ```bash
 # Start the day: sync everything
-ws-manager sync --rebase
+ws sync --rebase
 
 # Check workspace configuration at a glance
-ws-manager describe
+ws describe
 
 # Create a feature branch across all repos
-ws-manager checkout feature/payment-v2 --create
+ws checkout feature/payment-v2 --create
 
 # Check what's changed
-ws-manager status
+ws status
 
 # Stash work-in-progress before switching context
-ws-manager stash push --message "WIP: payment integration"
+ws stash push --message "WIP: payment integration"
 
 # Switch to hotfix branch
-ws-manager checkout hotfix/login-fix
+ws checkout hotfix/login-fix
 
 # Come back and restore work
-ws-manager checkout feature/payment-v2
-ws-manager stash pop
+ws checkout feature/payment-v2
+ws stash pop
 
 # Return all repos to their individual default branches
-ws-manager checkout --default
+ws checkout --default
 ```
 
 ### Preparing a release
 
 ```bash
 # Make sure everything is up to date
-ws-manager fetch --prune
-ws-manager pull --rebase
+ws fetch --prune
+ws pull --rebase
 
 # Merge feature branch into main
-ws-manager checkout main
-ws-manager merge feature/payment-v2 --no-ff --message "Release: payment v2"
+ws checkout main
+ws merge feature/payment-v2 --no-ff --message "Release: payment v2"
 
 # Push everything
-ws-manager push
+ws push
 
 # Run tests across all repos
-ws-manager foreach -- make test
+ws foreach -- make test
 
 # Clean up feature branches
-ws-manager branch feature/payment-v2 --delete
+ws branch feature/payment-v2 --delete
 ```
 
 ### Running batch operations
 
 ```bash
 # Install dependencies everywhere
-ws-manager foreach -- npm install
+ws foreach -- npm install
 
 # Check for security vulnerabilities
-ws-manager foreach -- npm audit
+ws foreach -- npm audit
 
 # Run linters
-ws-manager foreach -- ./scripts/lint.sh
+ws foreach -- ./scripts/lint.sh
 
 # Show recent commits
-ws-manager log --count 3
+ws log --count 3
 ```
 
 ---

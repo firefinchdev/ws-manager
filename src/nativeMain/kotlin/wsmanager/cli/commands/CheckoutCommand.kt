@@ -18,8 +18,8 @@ import wsmanager.util.FileUtils
 class CheckoutCommand : Command {
     override val name = "checkout"
     override val description = "Checkout a branch across all repositories"
-    override val usage = "ws-manager checkout <branch> [--create|-b]\n" +
-            "       ws-manager checkout --default|-d"
+    override val usage = "ws checkout <branch> [--create|-b]\n" +
+            "       ws checkout --default|-d"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

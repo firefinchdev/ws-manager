@@ -13,7 +13,7 @@ import wsmanager.util.FileUtils
 class MergeCommand : Command {
     override val name = "merge"
     override val description = "Merge a branch across all repositories"
-    override val usage = "ws-manager merge <branch> [--no-ff] [--message <msg>]"
+    override val usage = "ws merge <branch> [--no-ff] [--message <msg>]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

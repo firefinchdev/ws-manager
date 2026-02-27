@@ -12,7 +12,7 @@ import wsmanager.util.FileUtils
 class LogCommand : Command {
     override val name = "log"
     override val description = "Show recent commits across all repositories"
-    override val usage = "ws-manager log [--count <n>]"
+    override val usage = "ws log [--count <n>]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

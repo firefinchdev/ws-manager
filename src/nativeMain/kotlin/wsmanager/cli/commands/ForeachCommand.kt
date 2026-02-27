@@ -12,7 +12,7 @@ import wsmanager.util.FileUtils
 class ForeachCommand : Command {
     override val name = "foreach"
     override val description = "Execute a command in each repository"
-    override val usage = "ws-manager foreach -- <command>"
+    override val usage = "ws foreach -- <command>"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

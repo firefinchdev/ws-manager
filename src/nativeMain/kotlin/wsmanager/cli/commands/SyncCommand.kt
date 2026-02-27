@@ -11,7 +11,7 @@ import wsmanager.util.FileUtils
 class SyncCommand : Command {
     override val name = "sync"
     override val description = "Sync workspace: clone missing repos and update existing ones"
-    override val usage = "ws-manager sync [--rebase]"
+    override val usage = "ws sync [--rebase]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

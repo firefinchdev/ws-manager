@@ -11,7 +11,7 @@ import wsmanager.util.FileUtils
 class CloneCommand : Command {
     override val name = "clone"
     override val description = "Clone all repositories in the workspace"
-    override val usage = "ws-manager clone"
+    override val usage = "ws clone"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

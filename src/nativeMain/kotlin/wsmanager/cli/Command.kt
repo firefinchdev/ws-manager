@@ -41,7 +41,7 @@ data class CommandContext(
      */
     fun requireConfig(): WorkspaceConfig {
         return config ?: throw IllegalStateException(
-            "No workspace configuration found. Run 'ws-manager init' first or specify --config path."
+            "No workspace configuration found. Run 'ws init' first or specify --config path."
         )
     }
 

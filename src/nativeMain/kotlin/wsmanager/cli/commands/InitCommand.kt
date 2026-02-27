@@ -15,7 +15,7 @@ import wsmanager.util.FileUtils
 class InitCommand : Command {
     override val name = "init"
     override val description = "Initialize a new workspace configuration"
-    override val usage = "ws-manager init [--name <name>] [--path <config-path>]"
+    override val usage = "ws init [--name <name>] [--path <config-path>]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val workspaceName = getArgValue(args, "--name") ?: "my-workspace"
@@ -50,7 +50,7 @@ class InitCommand : Command {
             ConfigParser.write(sampleConfig, configPath)
             Printer.success("Workspace initialized!")
             Printer.info("Configuration written to: $configPath")
-            Printer.info("Edit the configuration to add your repositories, then run 'ws-manager clone' to set up.")
+            Printer.info("Edit the configuration to add your repositories, then run 'ws clone' to set up.")
             Printer.newline()
             Printer.info("Example configuration structure:")
             Printer.debug("  name: workspace name")

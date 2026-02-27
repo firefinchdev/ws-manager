@@ -13,7 +13,7 @@ import wsmanager.util.FileUtils
 class DescribeCommand : Command {
     override val name = "describe"
     override val description = "Describe the workspace configuration and all repositories"
-    override val usage = "ws-manager describe [--json]"
+    override val usage = "ws describe [--json]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()

@@ -12,7 +12,7 @@ import wsmanager.util.FileUtils
 class PullCommand : Command {
     override val name = "pull"
     override val description = "Pull from remote across all repositories"
-    override val usage = "ws-manager pull [--rebase] [--remote <remote>]"
+    override val usage = "ws pull [--rebase] [--remote <remote>]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()
