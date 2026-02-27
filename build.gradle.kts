@@ -1,6 +1,6 @@
 plugins {
-    kotlin("multiplatform") version "1.9.22"
-    kotlin("plugin.serialization") version "1.9.22"
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 group = "com.wsmanager"
@@ -15,7 +15,6 @@ kotlin {
     val isArm64 = System.getProperty("os.arch") == "aarch64"
     val nativeTarget = when {
         hostOs == "Mac OS X" && isArm64 -> macosArm64("native")
-        hostOs == "Mac OS X" && !isArm64 -> macosX64("native")
         hostOs == "Linux" && isArm64 -> linuxArm64("native")
         hostOs == "Linux" && !isArm64 -> linuxX64("native")
         hostOs.startsWith("Windows") -> mingwX64("native")
@@ -34,13 +33,13 @@ kotlin {
     sourceSets {
         val nativeMain by getting {
             dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+                implementation(libs.kotlinx.coroutines.core)
+                implementation(libs.kotlinx.serialization.json)
             }
         }
         val nativeTest by getting {
             dependencies {
-                implementation(kotlin("test"))
+                implementation(libs.kotlin.test)
             }
         }
     }

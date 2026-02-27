@@ -6,6 +6,8 @@ import kotlinx.coroutines.sync.withPermit
 import wsmanager.core.models.*
 import wsmanager.git.GitResult
 import kotlin.coroutines.coroutineContext
+import kotlin.time.Clock
+import kotlin.time.TimeSource
 
 /**
  * Core execution engine that orchestrates parallel operations across repositories.
@@ -225,6 +227,5 @@ class ExecutionEngine(
  * Get current time in milliseconds using monotonic time source.
  */
 private fun currentTimeMillis(): Long {
-    @Suppress("DEPRECATION")
-    return kotlin.system.getTimeMillis()
+    return Clock.System.now().toEpochMilliseconds()
 }
