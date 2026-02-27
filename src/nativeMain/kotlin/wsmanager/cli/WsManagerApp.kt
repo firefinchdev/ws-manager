@@ -22,6 +22,7 @@ class WsManagerApp {
         CloneCommand(),
         SyncCommand(),
         StatusCommand(),
+        DescribeCommand(),
         CheckoutCommand(),
         PullCommand(),
         PushCommand(),
@@ -209,12 +210,13 @@ class WsManagerApp {
         println("    ws-manager ${c.cyan("<command>")} [options]")
         println()
         println(c.bold("  WORKSPACE COMMANDS:"))
-        printCommandEntry("init", "Initialize a new workspace configuration")
-        printCommandEntry("clone", "Clone all repositories in the workspace")
-        printCommandEntry("sync", "Clone missing repos and update existing ones")
-        printCommandEntry("status", "Show status of all repositories")
-        printCommandEntry("foreach", "Execute a command in each repository")
-        printCommandEntry("log", "Show recent commits across all repositories")
+        printCommandEntry("init",     "Initialize a new workspace configuration")
+        printCommandEntry("describe", "Describe the workspace config and all repositories")
+        printCommandEntry("clone",    "Clone all repositories in the workspace")
+        printCommandEntry("sync",     "Clone missing repos and update existing ones")
+        printCommandEntry("status",   "Show status of all repositories")
+        printCommandEntry("foreach",  "Execute a command in each repository")
+        printCommandEntry("log",      "Show recent commits across all repositories")
         println()
         println(c.bold("  GIT COMMANDS:"))
         printCommandEntry("checkout", "Checkout a branch across all repositories")
