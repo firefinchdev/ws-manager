@@ -47,8 +47,8 @@ class WsManagerApp {
 
         // Parse global options
         val globalArgs = args.toMutableList()
-        val configPath = extractOption(globalArgs, "--config", "-c")
-            ?: WorkspaceConfig.DEFAULT_FILE_NAME
+        val explicitConfig = extractOption(globalArgs, "--config", "-c")
+        val configPath = explicitConfig ?: resolveWorkspaceConfig()
         val concurrencyStr = extractOption(globalArgs, "--concurrency", "-j")
         val concurrency = concurrencyStr?.toIntOrNull()
 
@@ -90,16 +90,30 @@ class WsManagerApp {
         val config = if (commandName != "init") {
             try {
                 if (!FileUtils.exists(configPath)) {
-                    if (commandName == "init") {
-                        null
-                    } else {
-                        Printer.error("Configuration file not found: $configPath")
-                        Printer.info("Run 'ws-manager init' to create one, or use '--config <path>' to specify a custom path.")
-                        return 1
-                    }
-                } else {
-                    ConfigParser.parseAndValidate(configPath)
+                    Printer.error("Configuration file not found: $configPath")
+                    Printer.info("Run 'ws-manager init' to create one, or use '--config <path>' to specify a custom path.")
+                    return 1
                 }
+
+                // Show discovery hint when config was found in a parent directory
+                val cwd = FileUtils.getCurrentDirectory()
+                val absConfig = FileUtils.absolutePath(configPath)
+                val cwdConfig = "$cwd/${WorkspaceConfig.DEFAULT_FILE_NAME}"
+                if (explicitConfig == null && absConfig != cwdConfig) {
+                    val c = TerminalColors
+                    println(c.dim("  ↑ workspace: $absConfig"))
+                }
+
+                val parsed = ConfigParser.parseAndValidate(configPath)
+                // Normalize basePath to absolute so repo paths resolve correctly
+                // regardless of the directory the user runs the command from.
+                val workspaceRoot = workspaceRootOf(configPath)
+                val absoluteBasePath = when {
+                    parsed.basePath == "." -> workspaceRoot
+                    parsed.basePath.startsWith("/") -> parsed.basePath
+                    else -> "$workspaceRoot/${parsed.basePath}"
+                }
+                parsed.copy(basePath = absoluteBasePath)
             } catch (e: ConfigParseException) {
                 Printer.error("Configuration error: ${e.message}")
                 return 1
@@ -137,6 +151,35 @@ class WsManagerApp {
             Printer.error("Unexpected error: ${e.message}")
             1
         }
+    }
+
+    /**
+     * Return the absolute directory that contains the given config file.
+     * This becomes the "workspace root" — all relative repo paths are resolved against it.
+     */
+    private fun workspaceRootOf(configPath: String): String {
+        val abs = FileUtils.absolutePath(configPath)
+        val lastSlash = abs.lastIndexOf('/')
+        return if (lastSlash > 0) abs.substring(0, lastSlash) else "/"
+    }
+
+    /**
+     * Resolve the workspace config path by walking up from the current working directory,
+     * mirroring how `git` discovers the `.git` directory.
+     *
+     * Search order:
+     *   1. Current directory
+     *   2. Each parent directory up to the filesystem root
+     *
+     * Falls back to the default filename in the current directory if nothing is found,
+     * so that normal "not found" error messages still fire correctly.
+     */
+    private fun resolveWorkspaceConfig(): String {
+        val found = FileUtils.findFileUpwards(
+            startDir = FileUtils.getCurrentDirectory(),
+            fileName = WorkspaceConfig.DEFAULT_FILE_NAME
+        )
+        return found ?: WorkspaceConfig.DEFAULT_FILE_NAME
     }
 
     /**
@@ -185,7 +228,7 @@ class WsManagerApp {
         printCommandEntry("stash", "Stash operations (push, pop, list, drop)")
         println()
         println(c.bold("  GLOBAL OPTIONS:"))
-        println("    ${c.cyan("--config, -c")} <path>    Path to workspace config file (default: workspace.json)")
+        println("    ${c.cyan("--config, -c")} <path>    Config file path (auto-discovered upwards if omitted)")
         println("    ${c.cyan("--concurrency, -j")} <n>  Max parallel operations (overrides config)")
         println("    ${c.cyan("--help, -h")}             Show help")
         println("    ${c.cyan("--version, -v")}          Show version")

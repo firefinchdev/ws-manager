@@ -34,13 +34,13 @@ class CheckoutCommand : Command {
         val operation = RepoOperation<String>(
             name = operationName,
             captureSnapshot = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (FileUtils.isDirectory(repoPath) && context.git.isGitRepository(repoPath)) {
                     context.git.currentBranch(repoPath).output
                 } else null
             },
             execute = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
 
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found at $repoPath")
@@ -58,7 +58,7 @@ class CheckoutCommand : Command {
                 }
             },
             rollback = { repo, previousBranch ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 // Rollback: checkout previous branch
                 val checkoutResult = context.git.checkout(repoPath, previousBranch)
                 // If we created the branch, delete it
@@ -80,9 +80,5 @@ class CheckoutCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 }

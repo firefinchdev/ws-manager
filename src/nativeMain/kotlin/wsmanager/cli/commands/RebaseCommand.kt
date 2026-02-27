@@ -32,13 +32,13 @@ class RebaseCommand : Command {
         val operation = RepoOperation<String>(
             name = "rebase",
             captureSnapshot = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (FileUtils.isDirectory(repoPath) && context.git.isGitRepository(repoPath)) {
                     context.git.headCommit(repoPath).output
                 } else null
             },
             execute = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
 
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found at $repoPath")
@@ -47,7 +47,7 @@ class RebaseCommand : Command {
                 context.git.rebase(repoPath, onto)
             },
             rollback = { repo, headCommit ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 // Try aborting rebase first
                 val abortResult = context.git.rebaseAbort(repoPath)
                 if (abortResult.success) {
@@ -72,9 +72,5 @@ class RebaseCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 }

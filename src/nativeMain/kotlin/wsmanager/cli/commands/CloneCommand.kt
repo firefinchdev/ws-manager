@@ -23,7 +23,7 @@ class CloneCommand : Command {
             operationName = "clone",
             repositories = repos,
             operation = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
 
                 // Check if already cloned
                 if (FileUtils.isDirectory(repoPath) && context.git.isGitRepository(repoPath)) {
@@ -59,9 +59,5 @@ class CloneCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 }

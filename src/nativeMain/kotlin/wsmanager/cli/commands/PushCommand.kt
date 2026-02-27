@@ -33,13 +33,13 @@ class PushCommand : Command {
             name = "push",
             captureSnapshot = { repo ->
                 // Capture HEAD for potential reference (push can't truly be rolled back)
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (FileUtils.isDirectory(repoPath) && context.git.isGitRepository(repoPath)) {
                     context.git.headCommit(repoPath).output
                 } else null
             },
             execute = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
 
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found at $repoPath")
@@ -76,11 +76,7 @@ class PushCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 
     private fun getArgValue(args: List<String>, flag: String): String? {
         val index = args.indexOf(flag)

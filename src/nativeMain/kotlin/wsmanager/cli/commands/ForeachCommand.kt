@@ -44,13 +44,13 @@ class ForeachCommand : Command {
 
         Printer.operationStart("foreach: $command", repos.size)
 
-        // Validate all repo paths before execution
-        val validRepos = repos.filter { repo ->
-            val repoPath = resolvePath(config.basePath, repo.path)
+        // Resolve and validate all repo paths before execution
+        val validRepos = repos.mapNotNull { repo ->
+            val repoPath = context.resolveRepoPath(repo)
             if (!FileUtils.isDirectory(repoPath)) {
                 Printer.warning("Skipping ${repo.displayName}: directory not found at $repoPath")
-                false
-            } else true
+                null
+            } else repo.copy(path = repoPath)
         }
 
         if (validRepos.isEmpty()) {
@@ -59,9 +59,7 @@ class ForeachCommand : Command {
         }
 
         val result = context.engine.executeForEach(
-            repositories = validRepos.map { repo ->
-                repo.copy(path = resolvePath(config.basePath, repo.path))
-            },
+            repositories = validRepos,
             command = command,
             onProgress = { _, result ->
                 Printer.repoResult(result)
@@ -72,9 +70,5 @@ class ForeachCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 }

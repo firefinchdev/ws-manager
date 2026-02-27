@@ -24,7 +24,7 @@ class SyncCommand : Command {
             operationName = "sync",
             repositories = repos,
             operation = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
 
                 if (FileUtils.isDirectory(repoPath) && context.git.isGitRepository(repoPath)) {
                     // Existing repo: fetch and pull
@@ -78,9 +78,5 @@ class SyncCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 }

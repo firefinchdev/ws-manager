@@ -23,7 +23,7 @@ class StatusCommand : Command {
         var hasErrors = false
 
         for (repo in repos) {
-            val repoPath = resolvePath(config.basePath, repo.path)
+            val repoPath = context.resolveRepoPath(repo)
 
             if (!FileUtils.isDirectory(repoPath)) {
                 Printer.repoStatus(repo, "N/A", "")
@@ -52,9 +52,5 @@ class StatusCommand : Command {
         return if (hasErrors) 1 else 0
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 }

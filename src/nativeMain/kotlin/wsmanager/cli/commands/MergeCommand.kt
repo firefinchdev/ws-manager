@@ -35,13 +35,13 @@ class MergeCommand : Command {
             name = "merge",
             captureSnapshot = { repo ->
                 // Capture HEAD commit for rollback via reset
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (FileUtils.isDirectory(repoPath) && context.git.isGitRepository(repoPath)) {
                     context.git.headCommit(repoPath).output
                 } else null
             },
             execute = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
 
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found at $repoPath")
@@ -56,7 +56,7 @@ class MergeCommand : Command {
             },
             rollback = { repo, headCommit ->
                 // Rollback: abort merge if in progress, or reset to previous HEAD
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 val abortResult = context.git.mergeAbort(repoPath)
                 if (abortResult.success) {
                     abortResult
@@ -80,11 +80,7 @@ class MergeCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 
     private fun getArgValue(args: List<String>, flag: String): String? {
         val index = args.indexOf(flag)

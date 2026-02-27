@@ -1,6 +1,7 @@
 package wsmanager.cli
 
 import wsmanager.config.WorkspaceConfig
+import wsmanager.core.models.Repository
 import wsmanager.engine.ExecutionEngine
 import wsmanager.git.GitOperations
 
@@ -42,6 +43,24 @@ data class CommandContext(
         return config ?: throw IllegalStateException(
             "No workspace configuration found. Run 'ws-manager init' first or specify --config path."
         )
+    }
+
+    /**
+     * Resolve a repository's local path to an absolute filesystem path.
+     *
+     * Resolution order:
+     *   1. If repo.path is already absolute — use it directly.
+     *   2. Otherwise combine config.basePath (always normalized to absolute
+     *      by WsManagerApp) with the repo's relative path.
+     *
+     * This ensures commands work correctly regardless of which directory
+     * inside the workspace the user runs them from.
+     */
+    fun resolveRepoPath(repo: Repository): String {
+        val repoPath = repo.path.removePrefix("./").removePrefix(".\\")
+        if (repoPath.startsWith("/")) return repoPath
+        val base = config?.basePath ?: return repoPath
+        return "$base/$repoPath"
     }
 
     /**

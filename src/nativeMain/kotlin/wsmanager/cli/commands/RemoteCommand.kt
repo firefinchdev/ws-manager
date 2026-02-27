@@ -44,7 +44,7 @@ class RemoteCommand : Command {
             operationName = "list remotes",
             repositories = repos,
             operation = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@executeBestEffort wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -88,7 +88,7 @@ class RemoteCommand : Command {
             operationName = "add remote",
             repositories = repos,
             operation = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@executeBestEffort wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -120,7 +120,7 @@ class RemoteCommand : Command {
             operationName = "remove remote",
             repositories = repos,
             operation = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@executeBestEffort wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -153,7 +153,7 @@ class RemoteCommand : Command {
             operationName = "set remote URL",
             repositories = repos,
             operation = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@executeBestEffort wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -166,11 +166,7 @@ class RemoteCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 
     private fun getArgValue(args: List<String>, flag: String): String? {
         val index = args.indexOf(flag)

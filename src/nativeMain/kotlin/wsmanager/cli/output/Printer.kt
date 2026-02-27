@@ -169,7 +169,10 @@ object Printer {
     private fun formatDuration(ms: Long): String {
         return when {
             ms < 1000 -> "${ms}ms"
-            ms < 60_000 -> "${"%.1f".format(ms / 1000.0)}s"
+            ms < 60_000 -> {
+                val seconds = ms / 1000.0
+                "${(seconds * 10).toInt() / 10.0}s"
+            }
             else -> {
                 val minutes = ms / 60_000
                 val seconds = (ms % 60_000) / 1000

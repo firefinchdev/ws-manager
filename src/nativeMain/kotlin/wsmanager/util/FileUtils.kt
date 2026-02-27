@@ -117,4 +117,48 @@ object FileUtils {
     fun deleteFile(path: String): Boolean {
         return remove(path) == 0
     }
+
+    /**
+     * Walk up the directory tree from [startDir] looking for a file named [fileName],
+     * stopping at the filesystem root. Mirrors how `git` discovers `.git` directories.
+     *
+     * @return The absolute path of the first match found, or null if not found anywhere.
+     */
+    fun findFileUpwards(startDir: String, fileName: String): String? {
+        // Resolve to absolute path and strip any trailing slash
+        var current = (if (startDir.startsWith("/")) startDir else absolutePath(startDir))
+            .trimEnd('/')
+
+        while (true) {
+            val candidate = "$current/$fileName"
+            if (exists(candidate)) return candidate
+
+            // Compute parent directory
+            val lastSlash = current.lastIndexOf('/')
+
+            if (lastSlash < 0) break           // No slash at all — give up
+            if (lastSlash == 0) {
+                // We are one level below root; check root itself then stop
+                val rootCandidate = "/$fileName"
+                if (exists(rootCandidate)) return rootCandidate
+                break
+            }
+
+            current = current.substring(0, lastSlash)
+        }
+
+        return null
+    }
+
+    /**
+     * Returns the parent directory of [path], or null if already at the root.
+     */
+    fun parentDirectory(path: String): String? {
+        val normalized = path.trimEnd('/')
+        val lastSlash = normalized.lastIndexOf('/')
+        return when {
+            lastSlash <= 0 -> null
+            else -> normalized.substring(0, lastSlash)
+        }
+    }
 }

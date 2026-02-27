@@ -46,14 +46,14 @@ class StashCommand : Command {
         val operation = RepoOperation<Boolean>(
             name = "stash push",
             captureSnapshot = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (FileUtils.isDirectory(repoPath) && context.git.isGitRepository(repoPath)) {
                     // Track whether there were changes to stash
                     !context.git.isClean(repoPath)
                 } else null
             },
             execute = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -65,7 +65,7 @@ class StashCommand : Command {
                 }
             },
             rollback = { repo, hadChanges ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (hadChanges) {
                     // Pop the stash we just pushed
                     context.git.stashPop(repoPath)
@@ -97,14 +97,14 @@ class StashCommand : Command {
         val operation = RepoOperation<String>(
             name = "stash pop",
             captureSnapshot = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (FileUtils.isDirectory(repoPath) && context.git.isGitRepository(repoPath)) {
                     // Capture stash list before popping
                     context.git.stashList(repoPath).output
                 } else null
             },
             execute = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -118,7 +118,7 @@ class StashCommand : Command {
             },
             rollback = { repo, _ ->
                 // After a stash pop, we can re-stash to undo
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 context.git.stash(repoPath, "rollback: re-stash after failed pop")
             }
         )
@@ -145,7 +145,7 @@ class StashCommand : Command {
             operationName = "stash list",
             repositories = repos,
             operation = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@executeBestEffort wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -181,7 +181,7 @@ class StashCommand : Command {
             operationName = "stash drop",
             repositories = repos,
             operation = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@executeBestEffort wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -194,11 +194,7 @@ class StashCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 
     private fun getArgValue(args: List<String>, flag: String): String? {
         val index = args.indexOf(flag)

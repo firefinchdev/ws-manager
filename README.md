@@ -16,6 +16,7 @@
   - [Configuration Fields](#configuration-fields)
   - [Validation Rules](#validation-rules)
 - [Global Options](#global-options)
+- [Workspace Auto-Discovery](#workspace-auto-discovery)
 - [Commands](#commands)
   - [Workspace Commands](#workspace-commands)
     - [init](#init)
@@ -52,6 +53,7 @@
 - **BEST_EFFORT strategy** for read operations &mdash; continue on failure, report everything
 - **Intelligent Git handling** &mdash; auto-creates tracking branches, handles multiple remotes
 - **JSON configuration** with strict validation before execution
+- **Workspace auto-discovery** &mdash; finds `workspace.json` by walking up the directory tree, just like `git` finds `.git`
 - **Colored terminal output** with progress indicators and structured summaries
 - **Shell command execution** across all repos via `foreach`
 - **Cross-platform** &mdash; compiles to native binary for macOS, Linux, and Windows
@@ -211,7 +213,7 @@ These options apply to all commands and must be placed before the command name:
 
 | Option | Short | Description |
 |---|---|---|
-| `--config <path>` | `-c` | Path to workspace configuration file (default: `workspace.json`) |
+| `--config <path>` | `-c` | Explicit config file path. If omitted, auto-discovered by walking up the directory tree |
 | `--concurrency <n>` | `-j` | Override max parallel operations from config |
 | `--help` | `-h` | Show help (or command-specific help when used with a command) |
 | `--version` | `-v` | Show version |
@@ -227,6 +229,53 @@ ws-manager -j 8 fetch --prune
 
 # Get help for a specific command
 ws-manager checkout --help
+```
+
+---
+
+## Workspace Auto-Discovery
+
+When `--config` is not provided, `ws-manager` discovers the nearest `workspace.json` by walking **up** the directory tree from the current working directory — exactly the same way `git` discovers the `.git` directory.
+
+This means you can run `ws-manager` from **anywhere inside your workspace**, including deep inside one of the managed repositories, and it will always find the right config.
+
+### How it works
+
+Given this directory structure:
+
+```
+~/projects/my-platform/       ← workspace.json lives here
+    workspace.json
+    api-gateway/              ← a managed repo
+        src/
+            controllers/
+                auth/         ← you are here
+    user-service/
+    shared-libs/
+```
+
+Running `ws-manager status` from `~/projects/my-platform/api-gateway/src/controllers/auth/` will:
+
+1. Check `auth/workspace.json` — not found
+2. Check `controllers/workspace.json` — not found
+3. Check `src/workspace.json` — not found
+4. Check `api-gateway/workspace.json` — not found
+5. Check `my-platform/workspace.json` — **found!**
+
+The resolved workspace is used and a dim hint is printed to stderr so you always know which config is active:
+
+```
+  ↑ workspace: /home/user/projects/my-platform/workspace.json
+```
+
+No hint is shown when you run from the workspace root itself (the config is in the current directory).
+
+### Override at any time
+
+You can always bypass discovery and point to a specific config:
+
+```bash
+ws-manager -c /path/to/other/workspace.json status
 ```
 
 ---

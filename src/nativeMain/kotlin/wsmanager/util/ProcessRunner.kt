@@ -31,8 +31,13 @@ data class ProcessResult(
 }
 
 /**
- * Cross-platform process execution using POSIX APIs.
- * Executes commands and captures stdout/stderr.
+ * Cross-platform process execution using POSIX fork()/exec()/waitpid().
+ *
+ * Deliberately avoids system() because system() sets SIGINT to SIG_IGN in the
+ * parent process while the child runs. This means pressing Ctrl+C kills the
+ * child git process but leaves the parent CLI running. With fork()/exec(), the
+ * parent's signal disposition is never modified, so SIGINT reaches the parent
+ * normally and the signal handler in Main.kt can exit immediately.
  */
 object ProcessRunner {
 
@@ -41,7 +46,6 @@ object ProcessRunner {
      * @param command List of command parts (e.g., ["git", "status"])
      * @param workingDir The directory to execute the command in
      * @param environment Optional environment variables
-     * @return ProcessResult with exit code and captured output
      */
     fun execute(
         command: List<String>,
@@ -49,38 +53,73 @@ object ProcessRunner {
         environment: Map<String, String> = emptyMap()
     ): ProcessResult {
         val cmdString = buildCommandString(command, workingDir, environment)
-        return executeShell(cmdString)
+        return forkExecShell(cmdString)
     }
 
     /**
      * Execute a raw shell command string.
      */
-    fun executeShell(command: String): ProcessResult {
-        // Create temp files for stdout and stderr
-        val stdoutFile = "/tmp/wsm_stdout_${getpid()}_${clock()}"
-        val stderrFile = "/tmp/wsm_stderr_${getpid()}_${clock()}"
+    fun executeShell(command: String): ProcessResult = forkExecShell(command)
 
-        try {
-            val fullCommand = "$command >$stdoutFile 2>$stderrFile"
-            val exitCode = system(fullCommand)
-            val exitStatus = (exitCode shr 8) and 0xFF // Extract actual exit status
+    /**
+     * Core implementation: fork a child process, exec `sh -c <command>` with
+     * stdout/stderr redirected to temp files, then waitpid() for the result.
+     *
+     * Unlike system(), this does NOT mask SIGINT in the parent, so Ctrl+C
+     * terminates the CLI immediately.
+     */
+    private fun forkExecShell(command: String): ProcessResult {
+        val tag = "${getpid()}_${clock()}"
+        val stdoutPath = "/tmp/wsm_out_$tag"
+        val stderrPath = "/tmp/wsm_err_$tag"
 
-            val stdout = FileUtils.readFile(stdoutFile) ?: ""
-            val stderr = FileUtils.readFile(stderrFile) ?: ""
+        // Embed I/O redirection in the shell command; the child `sh` handles it.
+        val shellCmd = "$command >$stdoutPath 2>$stderrPath"
 
-            return ProcessResult(
-                exitCode = exitStatus,
-                stdout = stdout,
-                stderr = stderr
-            )
-        } finally {
-            remove(stdoutFile)
-            remove(stderrFile)
+        val pid = fork()
+
+        // ---- CHILD PROCESS ----
+        if (pid == 0) {
+            memScoped {
+                val argv = allocArray<CPointerVar<ByteVar>>(4)
+                argv[0] = "sh".cstr.getPointer(this)
+                argv[1] = "-c".cstr.getPointer(this)
+                argv[2] = shellCmd.cstr.getPointer(this)
+                argv[3] = null
+                execv("/bin/sh", argv)
+            }
+            // execv only returns on error; terminate the child immediately.
+            exit(127)
+            // Unreachable — satisfies Kotlin's control-flow analysis.
+            @Suppress("UNREACHABLE_CODE")
+            return ProcessResult(127, "", "execv failed")
         }
+
+        // ---- FORK FAILED ----
+        if (pid < 0) {
+            return ProcessResult(-1, "", "fork() failed")
+        }
+
+        // ---- PARENT PROCESS ----
+        // Wait for the child.  waitpid() is interrupted by SIGINT (errno=EINTR),
+        // at which point our signal handler in Main.kt calls exit(130).
+        val exitCode = memScoped {
+            val statusVar = alloc<IntVar>()
+            waitpid(pid, statusVar.ptr, 0)
+            // Equivalent to WEXITSTATUS(status): extract the 8-bit exit code.
+            (statusVar.value shr 8) and 0xFF
+        }
+
+        val stdout = FileUtils.readFile(stdoutPath) ?: ""
+        val stderr = FileUtils.readFile(stderrPath) ?: ""
+        remove(stdoutPath)
+        remove(stderrPath)
+
+        return ProcessResult(exitCode = exitCode, stdout = stdout, stderr = stderr)
     }
 
     /**
-     * Build a command string with cd and env vars.
+     * Build a shell command string with optional cd and env-var prefixes.
      */
     private fun buildCommandString(
         command: List<String>,
@@ -89,17 +128,14 @@ object ProcessRunner {
     ): String {
         val parts = mutableListOf<String>()
 
-        // Change to working directory if specified
         if (workingDir != null) {
             parts.add("cd ${shellEscape(workingDir)}")
         }
 
-        // Set environment variables
         for ((key, value) in environment) {
             parts.add("export ${shellEscape(key)}=${shellEscape(value)}")
         }
 
-        // Build the command with proper escaping
         val escapedCommand = command.joinToString(" ") { shellEscape(it) }
         parts.add(escapedCommand)
 
@@ -107,16 +143,12 @@ object ProcessRunner {
     }
 
     /**
-     * Escape a string for safe shell usage.
-     * Prevents injection by wrapping in single quotes.
+     * Escape a string for safe shell usage by wrapping in single quotes.
+     * Prevents injection when user input is passed to the shell.
      */
     fun shellEscape(input: String): String {
         if (input.isEmpty()) return "''"
-        // If the string is simple (alphanumeric + common safe chars), no escaping needed
-        if (input.all { it.isLetterOrDigit() || it in "/-_.=@:" }) {
-            return input
-        }
-        // Wrap in single quotes, escaping any existing single quotes
+        if (input.all { it.isLetterOrDigit() || it in "/-_.=@:" }) return input
         return "'" + input.replace("'", "'\\''") + "'"
     }
 }

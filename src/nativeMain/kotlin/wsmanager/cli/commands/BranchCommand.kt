@@ -50,7 +50,7 @@ class BranchCommand : Command {
             operationName = "list branches",
             repositories = repos,
             operation = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@executeBestEffort wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -82,14 +82,14 @@ class BranchCommand : Command {
             name = "create branch",
             captureSnapshot = { },
             execute = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found")
                 }
                 context.git.createBranch(repoPath, branchName)
             },
             rollback = { repo, _ ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 context.git.deleteBranch(repoPath, branchName, force = true)
             }
         )
@@ -118,7 +118,7 @@ class BranchCommand : Command {
             name = "delete branch",
             captureSnapshot = { repo ->
                 // Capture the commit the branch points to for recreation
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (FileUtils.isDirectory(repoPath) && context.git.isGitRepository(repoPath)) {
                     val result = wsmanager.util.ProcessRunner.execute(
                         listOf("git", "rev-parse", branchName),
@@ -128,7 +128,7 @@ class BranchCommand : Command {
                 } else null
             },
             execute = { repo ->
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found")
                 }
@@ -136,7 +136,7 @@ class BranchCommand : Command {
             },
             rollback = { repo, commitHash ->
                 // Recreate the branch at the same commit
-                val repoPath = resolvePath(config.basePath, repo.path)
+                val repoPath = context.resolveRepoPath(repo)
                 context.git.createBranch(repoPath, branchName, commitHash)
             }
         )
@@ -152,9 +152,5 @@ class BranchCommand : Command {
         return if (result.isFullSuccess) 0 else 1
     }
 
-    private fun resolvePath(basePath: String, repoPath: String): String {
-        return if (repoPath.startsWith("/")) repoPath
-        else if (basePath == ".") repoPath
-        else "$basePath/$repoPath"
-    }
+
 }

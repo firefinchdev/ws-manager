@@ -176,12 +176,22 @@ class ExecutionEngine(
                 }
             }
 
-            // Notify progress for rollback results
-            results.filter { it.isRolledBack || it.isRollbackFailed }.forEach { result ->
+            // Notify all results: failed repos first (so user sees WHY it failed),
+            // then rollback/rollback-failed repos.
+            val orderedResults = results.sortedBy { r ->
+                when (r.status) {
+                    ExecutionStatus.FAILED -> 0
+                    ExecutionStatus.ROLLED_BACK -> 1
+                    ExecutionStatus.ROLLBACK_FAILED -> 2
+                    ExecutionStatus.SUCCESS -> 3
+                    ExecutionStatus.SKIPPED -> 4
+                }
+            }
+            orderedResults.forEach { result ->
                 onProgress?.invoke(result.repository, result)
             }
         } else {
-            // All succeeded - notify progress
+            // All succeeded (or no rollback) - notify in config order
             results.forEach { result ->
                 onProgress?.invoke(result.repository, result)
             }
