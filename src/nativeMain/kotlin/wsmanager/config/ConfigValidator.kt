@@ -33,8 +33,14 @@ object ConfigValidator {
             errors.add(ValidationError("repositories", "At least one repository must be defined"))
         }
 
+        // Pre-collect all repo names for global alias conflict detection
+        val allRepoNames = config.repositories.map { it.name }.toSet()
+
         // Per-repository validations
-        val repoNames = mutableSetOf<String>()
+        // Also used for global alias uniqueness across repos
+        val repoNames        = mutableSetOf<String>()
+        val globalAliasIndex = mutableMapOf<String, String>()   // alias → ownerRepoName
+
         config.repositories.forEachIndexed { index, repo ->
             val prefix = "repositories[$index]"
 
@@ -81,6 +87,46 @@ object ConfigValidator {
                     "$prefix.default_remote",
                     "Default remote '${repo.defaultRemote}' not found in remotes for repository '${repo.name}'"
                 ))
+            }
+
+            // Alias validations
+            val repoAliasSet = mutableSetOf<String>()
+            repo.aliases.forEachIndexed { aIdx, alias ->
+                val aPrefix = "$prefix.aliases[$aIdx]"
+
+                if (alias.isBlank()) {
+                    errors.add(ValidationError(aPrefix, "Alias must not be blank"))
+                    return@forEachIndexed
+                }
+
+                // Alias must not duplicate the repo's own name (redundant)
+                if (alias == repo.name) {
+                    errors.add(ValidationError(aPrefix, "Alias '$alias' is identical to the repository name — remove it"))
+                    return@forEachIndexed
+                }
+
+                // Alias must not conflict with any other repo's name
+                if (alias in allRepoNames) {
+                    errors.add(ValidationError(aPrefix, "Alias '$alias' conflicts with an existing repository name"))
+                    return@forEachIndexed
+                }
+
+                // Alias must be unique within this repo
+                if (!repoAliasSet.add(alias)) {
+                    errors.add(ValidationError(aPrefix, "Duplicate alias '$alias' in repository '${repo.name}'"))
+                    return@forEachIndexed
+                }
+
+                // Alias must be globally unique across all repos
+                val existingOwner = globalAliasIndex[alias]
+                if (existingOwner != null) {
+                    errors.add(ValidationError(
+                        aPrefix,
+                        "Alias '$alias' is already used by repository '$existingOwner'"
+                    ))
+                } else {
+                    globalAliasIndex[alias] = repo.name
+                }
             }
         }
 

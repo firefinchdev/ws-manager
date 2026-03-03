@@ -14,7 +14,14 @@ data class Repository(
     val defaultBranch: String = "main",
     @SerialName("default_remote")
     val defaultRemote: String = "origin",
-    val remotes: List<Remote> = emptyList()
+    val remotes: List<Remote> = emptyList(),
+    /**
+     * Optional short names / nicknames for this repository.
+     * Any alias can be used wherever a repo name is accepted in CLI commands.
+     * Aliases must be unique across the entire workspace (no two repos may share
+     * an alias, and no alias may duplicate another repo's [name]).
+     */
+    val aliases: List<String> = emptyList()
 ) {
     /**
      * Returns the remote matching the default remote alias, or null if not found.
@@ -30,4 +37,11 @@ data class Repository(
      * Display name for output purposes.
      */
     val displayName: String get() = name.ifEmpty { path.split("/").last() }
+
+    /**
+     * Returns `true` if [query] matches this repository's [name] or any of its [aliases].
+     * Comparison is case-sensitive to match standard Git tooling conventions.
+     */
+    fun matchesNameOrAlias(query: String): Boolean =
+        name == query || aliases.any { it == query }
 }

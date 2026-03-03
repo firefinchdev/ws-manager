@@ -17,6 +17,14 @@ data class WorkspaceConfig(
     val basePath: String = ".",
     val repositories: List<Repository> = emptyList()
 ) {
+    /**
+     * Find a repository by its exact [name] or any of its configured [aliases][Repository.aliases].
+     *
+     * Returns `null` if no repository matches.
+     */
+    fun findByNameOrAlias(query: String): Repository? =
+        repositories.firstOrNull { it.matchesNameOrAlias(query) }
+
     companion object {
         /** The workspace metadata directory (lives at the workspace root). */
         const val WS_DIR = ".ws"

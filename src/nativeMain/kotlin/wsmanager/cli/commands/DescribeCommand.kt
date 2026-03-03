@@ -69,6 +69,9 @@ class DescribeCommand : Command {
             printField("  Resolved",       repoPath)
             printField("  Default branch", repo.defaultBranch)
             printField("  Default remote", repo.defaultRemote)
+            if (repo.aliases.isNotEmpty()) {
+                printField("  Aliases", repo.aliases.joinToString(", ") { c.bold(it) })
+            }
 
             if (repo.remotes.isEmpty()) {
                 printField("  Remotes", c.yellow("none configured"))
