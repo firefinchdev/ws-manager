@@ -37,6 +37,7 @@
     - [branch](#branch)
     - [remote](#remote)
     - [stash](#stash)
+    - [open](#open)
 - [Execution Strategies](#execution-strategies)
   - [ATOMIC Strategy](#atomic-strategy)
   - [BEST_EFFORT Strategy](#best_effort-strategy)
@@ -55,10 +56,13 @@
 - **BEST_EFFORT strategy** for read operations &mdash; continue on failure, report everything
 - **Intelligent Git handling** &mdash; auto-creates tracking branches, handles multiple remotes
 - **JSON configuration** with strict validation before execution
-- **Workspace auto-discovery** &mdash; finds `workspace.json` by walking up the directory tree, just like `git` finds `.git`
-- **`describe`** &mdash; inspect the full workspace config: repos, remotes, clone status, all in one view
+- **`.ws/` workspace directory** &mdash; config lives in `.ws/workspace.json` at the workspace root; keeps workspace metadata separate from repo directories
+- **Workspace auto-discovery** &mdash; finds `.ws/workspace.json` by walking up the directory tree, just like `git` finds `.git`
+- **Repository aliases** &mdash; define short names for repos; use any alias anywhere a repo name is accepted
+- **`describe`** &mdash; inspect the full workspace config: repos, remotes, aliases, clone status, all in one view
 - **`refresh`** &mdash; one-command "clean slate" for starting a new task: discard changes, checkout default branches, sync remotes, pull latest
 - **`checkout --default`** &mdash; each repo checks out its own configured default branch
+- **`open`** &mdash; open any repository in the browser; supports GitHub, GitLab, Bitbucket, Azure DevOps, and self-hosted providers
 - **Colored terminal output** with progress indicators and structured summaries
 - **Shell command execution** across all repos via `foreach`
 - **Cross-platform** &mdash; compiles to native binary for macOS, Linux, and Windows
@@ -93,15 +97,15 @@ cp build/bin/native/releaseExecutable/ws.kexe /usr/local/bin/ws
 ## Quick Start
 
 ```bash
-# 1. Initialize a new workspace
+# 1. Initialize a new workspace (creates .ws/workspace.json)
 ws init --name my-project
 
-# 2. Edit workspace.json to add your repositories (see Configuration below)
+# 2. Edit .ws/workspace.json to add your repositories (see Configuration below)
 
 # 3. Clone all repositories
 ws clone
 
-# 4. Inspect the workspace — repos, remotes, clone status
+# 4. Inspect the workspace — repos, remotes, aliases, clone status
 ws describe
 
 # 5. Check status across all repos
@@ -119,7 +123,10 @@ ws foreach -- make test
 # 9. Push changes
 ws push --set-upstream
 
-# 10. Done with the feature? Reset everything to a clean baseline
+# 10. Open the main API repo in the browser
+ws open api-gateway
+
+# 11. Done with the feature? Reset everything to a clean baseline
 ws refresh
 ```
 
@@ -129,7 +136,7 @@ ws refresh
 
 ### Configuration File Format
 
-`ws` uses a JSON configuration file (default: `workspace.json` in the current directory).
+`ws` uses a JSON configuration file located at `.ws/workspace.json` inside the workspace root directory. The `.ws/` directory is created automatically by `ws init`.
 
 ```json
 {
@@ -139,6 +146,7 @@ ws refresh
     "repositories": [
         {
             "name": "api-gateway",
+            "aliases": ["api", "gw"],
             "path": "./api-gateway",
             "default_branch": "main",
             "default_remote": "origin",
@@ -155,6 +163,7 @@ ws refresh
         },
         {
             "name": "user-service",
+            "aliases": ["users"],
             "path": "./user-service",
             "default_branch": "main",
             "default_remote": "origin",
@@ -195,6 +204,7 @@ ws refresh
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `name` | string | *(required)* | Unique name for the repository |
+| `aliases` | array | `[]` | Optional short names; any alias can be used wherever the repo name is accepted |
 | `path` | string | *(required)* | Local filesystem path (absolute or relative to `base_path`) |
 | `default_branch` | string | `"main"` | Default branch name |
 | `default_remote` | string | `"origin"` | Default remote alias for push/pull/fetch operations |
@@ -213,8 +223,11 @@ The configuration is strictly validated before any command executes:
 - **Remote aliases** must be unique within each repository
 - **Remote alias and URL** must not be blank
 - **Default remote** must match one of the repository's defined remote aliases
+- **Repository aliases** must not be blank
+- **Repository aliases** must not duplicate the repo's own name
+- **Repository aliases** must be globally unique — no two repos may share an alias, and aliases may not clash with any repo's `name`
 
-Validation errors are reported with precise field paths (e.g., `repositories[0].remotes[1].alias`).
+Validation errors are reported with precise field paths (e.g., `repositories[0].aliases[1]`).
 
 ---
 
@@ -232,8 +245,8 @@ These options apply to all commands and must be placed before the command name:
 **Examples:**
 
 ```bash
-# Use a custom config file
-ws -c ~/projects/workspace.json status
+# Use a custom config file (bypasses auto-discovery)
+ws -c ~/projects/my-platform/.ws/workspace.json status
 
 # Override concurrency to 8 parallel operations
 ws -j 8 fetch --prune
@@ -246,7 +259,7 @@ ws checkout --help
 
 ## Workspace Auto-Discovery
 
-When `--config` is not provided, `ws` discovers the nearest `workspace.json` by walking **up** the directory tree from the current working directory — exactly the same way `git` discovers the `.git` directory.
+When `--config` is not provided, `ws` discovers the nearest `.ws/workspace.json` by walking **up** the directory tree from the current working directory — exactly the same way `git` discovers the `.git` directory.
 
 This means you can run `ws` from **anywhere inside your workspace**, including deep inside one of the managed repositories, and it will always find the right config.
 
@@ -255,8 +268,9 @@ This means you can run `ws` from **anywhere inside your workspace**, including d
 Given this directory structure:
 
 ```
-~/projects/my-platform/       ← workspace.json lives here
-    workspace.json
+~/projects/my-platform/       ← workspace root
+    .ws/
+        workspace.json        ← config lives here
     api-gateway/              ← a managed repo
         src/
             controllers/
@@ -267,19 +281,19 @@ Given this directory structure:
 
 Running `ws status` from `~/projects/my-platform/api-gateway/src/controllers/auth/` will:
 
-1. Check `auth/workspace.json` — not found
-2. Check `controllers/workspace.json` — not found
-3. Check `src/workspace.json` — not found
-4. Check `api-gateway/workspace.json` — not found
-5. Check `my-platform/workspace.json` — **found!**
+1. Check `auth/.ws/workspace.json` — not found
+2. Check `controllers/.ws/workspace.json` — not found
+3. Check `src/.ws/workspace.json` — not found
+4. Check `api-gateway/.ws/workspace.json` — not found
+5. Check `my-platform/.ws/workspace.json` — **found!** Workspace root = `my-platform/`
 
-The resolved workspace is used and a dim hint is printed to stderr so you always know which config is active:
+The resolved workspace root is used and a dim hint is printed so you always know which workspace is active:
 
 ```
-  ↑ workspace: /home/user/projects/my-platform/workspace.json
+  ↑ workspace: /home/user/projects/my-platform
 ```
 
-No hint is shown when you run from the workspace root itself (the config is in the current directory).
+No hint is shown when you run from the workspace root itself.
 
 ### Override at any time
 
@@ -307,10 +321,12 @@ ws init [--name <name>]
 |---|---|
 | `--name <name>` | Workspace name (default: `"my-workspace"`) |
 
-Creates a `workspace.json` file with a sample repository entry. Edit this file to define your actual repositories before running other commands.
+Creates the `.ws/` directory and writes `.ws/workspace.json` with a sample repository entry. Edit this file to define your actual repositories before running other commands.
 
 ```bash
 ws init --name my-platform
+# → created .ws/
+# → created .ws/workspace.json
 ```
 
 ---
@@ -331,7 +347,7 @@ ws describe [--json]
 
 Displays:
 - **Workspace settings** &mdash; config file path (absolute), workspace root, max concurrency, repository count
-- **Per-repository detail** &mdash; relative path, resolved absolute path, default branch, default remote, all remotes with their URLs
+- **Per-repository detail** &mdash; relative path, resolved absolute path, default branch, default remote, all remotes with their URLs, and any configured aliases
 - **Clone status** per repo &mdash; `cloned` (green), `directory exists (not a git repo)` (yellow), or `not cloned` (red)
 - **Summary line** &mdash; totals at the bottom (e.g., `3 cloned | 1 not cloned`)
 
@@ -445,9 +461,19 @@ ws status
 ```
 
 Displays per-repository:
-- Current branch name
+- Current branch name with **remote tracking status** &mdash; inline indicator showing sync state with the upstream
 - Working tree status (clean or list of changed files)
 - Warnings for missing or non-Git directories
+
+**Tracking status indicators:**
+
+| Indicator | Meaning |
+|---|---|
+| `✓ up to date with origin/main` | In sync with remote |
+| `↑ ahead of origin/main by N commit(s)` | Local commits not yet pushed |
+| `↓ behind origin/main by N commit(s)` | Remote has commits not yet pulled |
+| `⇕ diverged from origin/main (+N/-N)` | Both local and remote have new commits |
+| `detached HEAD` | Not on a branch |
 
 Output uses Git's short status format with color-coded indicators:
 - Green: staged files
@@ -843,6 +869,61 @@ ws stash drop --index 2
 
 ---
 
+#### open
+
+Open one or all repositories in the browser using the remote URL.
+
+```
+ws open [<repo>] [--remote <alias>] [--branch <branch>] [--print]
+```
+
+| Option | Short | Description |
+|---|---|---|
+| `<repo>` | | Repository name or alias to open (omit to open all repos) |
+| `--remote <alias>` | | Use a specific remote's URL (default: each repo's `default_remote`) |
+| `--branch <branch>` | | Open at a specific branch (default: current local branch, or `default_branch` if not cloned) |
+| `--print` | | Print URLs to stdout instead of opening the browser |
+
+**Strategy:** n/a (read-only)
+
+Resolves the remote URL for each repository and converts it to a browser URL, then opens it using the system browser (`open` on macOS, `xdg-open` on Linux).
+
+**Supported providers:**
+
+| Provider | SSH & HTTPS | Branch URL pattern |
+|---|---|---|
+| GitHub | ✓ | `github.com/org/repo/tree/<branch>` |
+| GitLab (cloud + self-hosted) | ✓ | `gitlab.com/org/repo/-/tree/<branch>` |
+| Bitbucket | ✓ | `bitbucket.org/org/repo/src/<branch>` |
+| Azure DevOps | ✓ | `dev.azure.com/org/project/_git/repo?version=GB<branch>` |
+| SourceHut, Gitea, Forgejo | ✓ | `host/org/repo/tree/<branch>` |
+| Generic self-hosted | ✓ | `host/org/repo/tree/<branch>` |
+
+Both SSH (`git@github.com:org/repo.git`) and HTTPS (`https://github.com/org/repo.git`) remote URL formats are supported automatically.
+
+You can use a repository's **alias** as the `<repo>` argument:
+
+```bash
+# Open all repos in the browser at their current branch
+ws open
+
+# Open a single repo by name or alias
+ws open api-gateway
+ws open api          # alias works too
+
+# Open at a specific branch
+ws open api --branch feature/payment-v2
+
+# Open using a different remote (e.g., upstream fork)
+ws open api --remote upstream
+
+# Just print the URLs (useful for scripting)
+ws open --print
+ws open api --print | pbcopy
+```
+
+---
+
 ## Execution Strategies
 
 Every operation uses one of two execution strategies. The strategy determines how the tool handles partial failures across repositories.
@@ -865,7 +946,7 @@ Every operation uses one of two execution strategies. The strategy determines ho
 
 ### BEST_EFFORT Strategy
 
-**Used for:** clone, sync, refresh, status, pull, fetch, log, foreach, branch list, remote operations, stash list, stash drop
+**Used for:** clone, sync, refresh, status, open, pull, fetch, log, foreach, branch list, remote operations, stash list, stash drop
 
 **Behavior:**
 
@@ -926,7 +1007,8 @@ src/nativeMain/kotlin/wsmanager/
 │   │   ├── RemoteCommand.kt         # Remote list/add/remove/set-url
 │   │   ├── StashCommand.kt          # Stash push/pop/list/drop
 │   │   ├── ForeachCommand.kt        # Execute shell commands
-│   │   └── LogCommand.kt            # Show recent commits
+│   │   ├── LogCommand.kt            # Show recent commits
+│   │   └── OpenCommand.kt           # Open repo in browser
 │   └── output/
 │       ├── Printer.kt               # Output formatting and UX
 │       └── TerminalColors.kt        # ANSI color codes
@@ -947,8 +1029,9 @@ src/nativeMain/kotlin/wsmanager/
 │   ├── GitCommandExecutor.kt        # Process-based Git implementation
 │   └── GitResult.kt                 # Git operation result type
 └── util/
-    ├── ProcessRunner.kt             # Cross-platform process execution
-    └── FileUtils.kt                 # File I/O via POSIX APIs
+    ├── ProcessRunner.kt             # Cross-platform process execution (fork/exec, SIGINT-safe)
+    ├── FileUtils.kt                 # File I/O via POSIX APIs
+    └── GitRemoteUrl.kt              # Remote URL parser + browser URL builder
 ```
 
 ### Key Design Principles
@@ -995,16 +1078,17 @@ src/nativeMain/kotlin/wsmanager/
 ### Setting up a new workspace
 
 ```bash
-# Create workspace config
+# Create workspace config (creates .ws/workspace.json)
 ws init --name platform-services
 
-# Edit workspace.json to add all your repos
+# Edit .ws/workspace.json to add all your repos
 # (See Configuration section above)
 
 # Clone everything
 ws clone
 
-# Verify all repos are set up
+# Verify all repos are set up and inspect their config
+ws describe
 ws status
 ```
 
@@ -1033,8 +1117,15 @@ ws describe
 # Create a feature branch across all repos
 ws checkout feature/payment-v2 --create
 
-# Check what's changed
+# Check what's changed (shows branch + remote tracking status)
 ws status
+
+# Open the API repo in the browser to review a PR
+ws open api-gateway
+ws open api           # alias works too
+
+# Open all repos at the current feature branch
+ws open --branch feature/payment-v2
 
 # Stash work-in-progress before switching context
 ws stash push --message "WIP: payment integration"
