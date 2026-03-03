@@ -35,7 +35,8 @@ class WsManagerApp {
         RemoteCommand(),
         StashCommand(),
         ForeachCommand(),
-        LogCommand()
+        LogCommand(),
+        OpenCommand()
     ).associateBy { it.name }
 
     /**
@@ -233,6 +234,7 @@ class WsManagerApp {
         printCommandEntry("status",   "Show status of all repositories")
         printCommandEntry("foreach",  "Execute a command in each repository")
         printCommandEntry("log",      "Show recent commits across all repositories")
+        printCommandEntry("open",     "Open repositories in the browser")
         println()
         println(c.bold("  GIT COMMANDS:"))
         printCommandEntry("checkout", "Checkout a branch across all repositories (--default for per-repo default)")
