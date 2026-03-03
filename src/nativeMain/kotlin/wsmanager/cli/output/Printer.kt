@@ -153,14 +153,67 @@ object Printer {
     fun repoStatus(repo: Repository, branchInfo: String, statusOutput: String) {
         println()
         println("  ${c.boldCyan("▸")} ${c.bold(repo.displayName)} ${c.dim("(${repo.path})")}")
-        println("    ${c.blue("Branch:")} $branchInfo")
-        if (statusOutput.isBlank()) {
+
+        // git status --short --branch always emits a "## branch...remote [ahead/behind]" header
+        val lines = statusOutput.lines().filter { it.isNotBlank() }
+        val branchLine = lines.firstOrNull { it.startsWith("##") }
+        val fileLines  = lines.filter { !it.startsWith("##") }
+
+        // Branch + tracking relationship on one line
+        val tracking = branchLine?.let { parseTrackingStatus(it) }
+        val trackingSuffix = if (tracking != null) "  $tracking" else ""
+        println("    ${c.blue("Branch:")} ${c.bold(branchInfo)}$trackingSuffix")
+
+        // File changes or clean indicator
+        if (fileLines.isEmpty()) {
             println("    ${c.green("Working tree clean")}")
         } else {
-            statusOutput.lines().filter { it.isNotBlank() }.forEach { line ->
-                val formatted = formatStatusLine(line)
-                println("    $formatted")
+            fileLines.forEach { line -> println("    ${formatStatusLine(line)}") }
+        }
+    }
+
+    /**
+     * Parse the `## branch...remote/branch [ahead X, behind Y]` line emitted by
+     * `git status --short --branch` into a styled one-liner, e.g.:
+     *
+     *   ## main...origin/main              →  ✓ up to date with origin/main
+     *   ## main...origin/main [ahead 2]    →  ↑ ahead of origin/main by 2 commits
+     *   ## main...origin/main [behind 3]   →  ↓ behind origin/main by 3 commits
+     *   ## main...origin/main [ahead 2, behind 1]  →  ⇕ diverged from origin/main (+2/-1)
+     *   ## HEAD (no branch)                →  detached HEAD
+     *   ## main                            →  null  (no tracking branch configured)
+     */
+    private fun parseTrackingStatus(branchLine: String): String? {
+        val content = branchLine.removePrefix("##").trim()
+
+        if (content.startsWith("HEAD (no branch)")) return c.yellow("detached HEAD")
+        if ("..." !in content) return null          // local-only branch, nothing to show
+
+        val remotePart  = content.substringAfter("...").trim()
+        val remoteBranch = remotePart.substringBefore(" ").trimEnd('[', ' ')
+        val bracket      = Regex("\\[(.+?)]").find(remotePart)?.groupValues?.get(1)
+
+        return when {
+            bracket == null ->
+                c.green("✓ up to date with $remoteBranch")
+
+            "ahead" in bracket && "behind" in bracket -> {
+                val ahead  = Regex("ahead (\\d+)").find(bracket)?.groupValues?.get(1) ?: "?"
+                val behind = Regex("behind (\\d+)").find(bracket)?.groupValues?.get(1) ?: "?"
+                c.yellow("⇕ diverged from $remoteBranch (+$ahead/-$behind)")
             }
+
+            "ahead" in bracket -> {
+                val n = Regex("ahead (\\d+)").find(bracket)?.groupValues?.get(1) ?: "?"
+                c.yellow("↑ ahead of $remoteBranch by $n commit${if (n != "1") "s" else ""}")
+            }
+
+            "behind" in bracket -> {
+                val n = Regex("behind (\\d+)").find(bracket)?.groupValues?.get(1) ?: "?"
+                c.red("↓ behind $remoteBranch by $n commit${if (n != "1") "s" else ""}")
+            }
+
+            else -> null
         }
     }
 
