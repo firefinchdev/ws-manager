@@ -101,10 +101,11 @@ class WsManagerApp {
                 // Show discovery hint when config was found in a parent directory
                 val cwd = FileUtils.getCurrentDirectory()
                 val absConfig = FileUtils.absolutePath(configPath)
-                val cwdConfig = "$cwd/${WorkspaceConfig.DEFAULT_FILE_NAME}"
+                val cwdConfig = "$cwd/${WorkspaceConfig.DEFAULT_CONFIG_PATH}"
                 if (explicitConfig == null && absConfig != cwdConfig) {
                     val c = TerminalColors
-                    println(c.dim("  ↑ workspace: $absConfig"))
+                    // Show the workspace root (parent of .ws/), not the internal config path
+                    println(c.dim("  ↑ workspace: ${workspaceRootOf(configPath)}"))
                 }
 
                 val parsed = ConfigParser.parseAndValidate(configPath)
@@ -157,13 +158,25 @@ class WsManagerApp {
     }
 
     /**
-     * Return the absolute directory that contains the given config file.
-     * This becomes the "workspace root" — all relative repo paths are resolved against it.
+     * Return the workspace root for the given config file path.
+     *
+     * When the config lives in the standard location (`<root>/.ws/workspace.json`),
+     * the workspace root is the **parent of `.ws/`**, not `.ws/` itself.
+     *
+     * For custom `--config` paths that don't live inside a `.ws/` directory, the
+     * parent directory of the config file is used as a fallback.
      */
     private fun workspaceRootOf(configPath: String): String {
         val abs = FileUtils.absolutePath(configPath)
-        val lastSlash = abs.lastIndexOf('/')
-        return if (lastSlash > 0) abs.substring(0, lastSlash) else "/"
+        val configDir = abs.substringBeforeLast('/')          // e.g. /projects/my-app/.ws
+        val dirName   = configDir.substringAfterLast('/')     // e.g. .ws
+        return if (dirName == WorkspaceConfig.WS_DIR) {
+            // Standard layout: go one level above .ws/
+            configDir.substringBeforeLast('/').ifEmpty { "/" }
+        } else {
+            // Custom --config path: use the config's directory as the root
+            configDir.ifEmpty { "/" }
+        }
     }
 
     /**
@@ -180,9 +193,9 @@ class WsManagerApp {
     private fun resolveWorkspaceConfig(): String {
         val found = FileUtils.findFileUpwards(
             startDir = FileUtils.getCurrentDirectory(),
-            fileName = WorkspaceConfig.DEFAULT_FILE_NAME
+            fileName = WorkspaceConfig.DEFAULT_CONFIG_PATH
         )
-        return found ?: WorkspaceConfig.DEFAULT_FILE_NAME
+        return found ?: WorkspaceConfig.DEFAULT_CONFIG_PATH
     }
 
     /**
