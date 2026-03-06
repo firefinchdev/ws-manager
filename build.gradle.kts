@@ -81,3 +81,36 @@ kotlin {
         }
     }
 }
+
+// ── Post-link strip task ────────────────────────────────────────────────────
+// Strips the release binary of residual symbol-table entries that Kotlin/Native
+// does not remove on its own.  On macOS `strip -Sx` removes debug info and local
+// symbols while keeping the global symbol table intact (required by dyld).
+// On Linux `strip -s` removes everything safely from a self-contained executable.
+val stripReleaseExecutable by tasks.registering(Exec::class) {
+    val hostOs = System.getProperty("os.name")
+    val binaryName = "ws.kexe"
+    val binaryPath = layout.buildDirectory
+        .file("bin/native/releaseExecutable/$binaryName")
+        .get().asFile
+
+    dependsOn("linkReleaseExecutableNative")
+
+    val stripArgs: List<String> = when {
+        hostOs == "Mac OS X"        -> listOf("strip", "-Sx", binaryPath.absolutePath)
+        hostOs.startsWith("Linux")  -> listOf("strip", "-s",  binaryPath.absolutePath)
+        else                        -> listOf("strip",        binaryPath.absolutePath)
+    }
+    commandLine(stripArgs)
+
+    doFirst {
+        if (!binaryPath.exists()) {
+            throw GradleException("Release binary not found at $binaryPath — run linkReleaseExecutableNative first")
+        }
+    }
+}
+
+// Wire strip into the standard nativeBinaries lifecycle task
+tasks.named("nativeBinaries") {
+    finalizedBy(stripReleaseExecutable)
+}
