@@ -23,7 +23,7 @@ class PushCommand : Command {
         val remote = getArgValue(args, "--remote")
 
         if (force) {
-            Printer.warning("Force push requested. This uses --force-with-lease for safety.")
+            Printer.warning("Force push requested.")
         }
 
         Printer.operationStart("Push", repos.size)

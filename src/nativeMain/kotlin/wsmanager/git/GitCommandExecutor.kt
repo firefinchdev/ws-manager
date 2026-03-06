@@ -117,7 +117,7 @@ class GitCommandExecutor : GitOperations {
 
     override fun push(repoPath: String, remote: String?, branch: String?, force: Boolean, setUpstream: Boolean): GitResult {
         val args = mutableListOf("push")
-        if (force) args.add("--force-with-lease")
+        if (force) args.add("--force")
         if (setUpstream) args.add("--set-upstream")
         if (remote != null) args.add(remote)
         if (branch != null) args.add(branch)

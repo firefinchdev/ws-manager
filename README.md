@@ -627,13 +627,13 @@ ws push [--remote <remote>] [--force] [--set-upstream]
 | Option | Short | Description |
 |---|---|---|
 | `--remote <remote>` | | Push to a specific remote (default: each repo's `default_remote`) |
-| `--force` | `-f` | Force push (uses `--force-with-lease` for safety) |
+| `--force` | `-f` | Force push (`git push --force`) |
 | `--set-upstream` | `-u` | Set upstream tracking reference |
 
 **Strategy:** ATOMIC (but note: push cannot be truly rolled back once sent to remote)
 
 - Automatically detects current branch and pushes it
-- Force push uses `--force-with-lease` instead of `--force` to prevent overwriting others' work
+- Force push passes `--force` directly to git
 - Warns if partial push occurs (some repos pushed, others failed)
 
 ```bash
