@@ -242,7 +242,7 @@ class WsManagerApp {
         printCommandEntry("push", "Push to remote across all repositories")
         printCommandEntry("fetch", "Fetch from remote across all repositories")
         printCommandEntry("merge", "Merge a branch across all repositories")
-        printCommandEntry("rebase", "Rebase onto a branch across all repositories")
+        printCommandEntry("rebase", "Rebase onto a branch across all repositories (--default rebases onto each repo's default branch)")
         printCommandEntry("branch", "Branch management (list, create, delete)")
         printCommandEntry("remote", "Remote management (list, add, remove, set-url)")
         printCommandEntry("stash", "Stash operations (push, pop, list, drop)")

@@ -9,25 +9,38 @@ import wsmanager.util.FileUtils
 /**
  * Rebase current branch onto a target branch across all repositories.
  * Uses ATOMIC strategy with rebase --abort as rollback.
+ *
+ * Options
+ * ──────────────────────────────────────────────────────────────────────────
+ *   <onto-branch>        Explicit branch to rebase onto (all repos use this)
+ *   --default | -d       Rebase each repo's current branch onto that repo's
+ *                        own default_branch as declared in workspace.json
  */
 class RebaseCommand : Command {
     override val name = "rebase"
     override val description = "Rebase current branch onto a target across all repositories"
-    override val usage = "ws rebase <onto-branch>"
+    override val usage = "ws rebase <onto-branch>\n       ws rebase --default"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()
-        val branchArgs = args.filter { !it.startsWith("-") }
 
-        if (branchArgs.isEmpty()) {
-            Printer.error("Target branch required. Usage: $usage")
+        val useDefault = args.contains("--default") || args.contains("-d")
+        val branchArgs  = args.filter { !it.startsWith("-") }
+
+        // Validate: need either <onto-branch> or --default
+        if (!useDefault && branchArgs.isEmpty()) {
+            Printer.error("Target branch required.")
+            Printer.info("  Usage: ws rebase <onto-branch>")
+            Printer.info("         ws rebase --default   (rebase onto each repo's configured default branch)")
             return 1
         }
 
-        val onto = branchArgs.first()
+        val fixedOnto = if (!useDefault) branchArgs.first() else null
+
         val repos = config.repositories
 
-        Printer.operationStart("Rebase onto '$onto'", repos.size)
+        val label = if (useDefault) "Rebase onto each repo's default branch" else "Rebase onto '$fixedOnto'"
+        Printer.operationStart(label, repos.size)
 
         val operation = RepoOperation<String>(
             name = "rebase",
@@ -44,6 +57,8 @@ class RebaseCommand : Command {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found at $repoPath")
                 }
 
+                // Resolve onto-branch: either the fixed arg or this repo's default branch
+                val onto = fixedOnto ?: repo.defaultBranch
                 context.git.rebase(repoPath, onto)
             },
             rollback = { repo, headCommit ->
@@ -71,6 +86,4 @@ class RebaseCommand : Command {
         Printer.operationSummary(result)
         return if (result.isFullSuccess) 0 else 1
     }
-
-
 }

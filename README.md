@@ -707,15 +707,26 @@ Rebase the current branch onto a target branch across all repositories.
 
 ```
 ws rebase <onto-branch>
+ws rebase --default|-d
 ```
+
+| Option | Short | Description |
+|---|---|---|
+| `<onto-branch>` | | Explicit branch to rebase onto (same branch used for all repos) |
+| `--default` | `-d` | Rebase each repo's current branch onto that repo's own `default_branch` as declared in `workspace.json` |
 
 **Strategy:** ATOMIC
 
 **Rollback on failure:** Aborts the rebase if still in progress, or resets to the previous HEAD commit.
 
 ```bash
-# Rebase onto main
+# Rebase onto an explicit branch across all repos
 ws rebase main
+
+# Rebase each repo onto its own configured default branch
+# (repo-a → main, repo-b → develop, etc.)
+ws rebase --default
+ws rebase -d
 ```
 
 ---
