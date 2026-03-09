@@ -19,16 +19,18 @@ import wsmanager.util.ProcessRunner
  *
  * Arguments / Options
  * ──────────────────────────────────────────────────────────────────
- *   [repo-name]         (optional) Name of a single repo to open, as defined in workspace config.
- *                       If omitted, all repositories are opened.
+ *   (no args)           Open only repos whose current branch has commits ahead of
+ *                       their configured default_branch — i.e., repos with active work.
+ *   all                 Open ALL repositories (previous default behaviour).
+ *   <repo-name>         Open a specific repository by name or alias.
  *   --remote  <alias>   Remote alias to use (default: each repo's default_remote)
  *   --branch  <name>    Branch to show (default: current branch, falls back to default_branch)
  *   --print             Print URLs only — do not open the browser
  */
 class OpenCommand : Command {
     override val name = "open"
-    override val description = "Open repositories in the browser"
-    override val usage = "ws open [<repo-name>] [--remote <remote>] [--branch <branch>] [--print]"
+    override val description = "Open repositories with active work in browser (use 'all' to open all)"
+    override val usage = "ws open [all|<repo-name>] [--remote <remote>] [--branch <branch>] [--print]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()
@@ -38,27 +40,51 @@ class OpenCommand : Command {
         val branchOverride = getArgValue(args, "--branch")
         val printOnly      = args.contains("--print")
 
-        // Positional arg: optional repo name filter (anything that isn't a flag or flag value)
-        val flagValues = listOfNotNull(remoteOverride, branchOverride)
-        val repoName   = args.filter { !it.startsWith("-") && it !in flagValues }.firstOrNull()
+        // Positional arg: anything that isn't a flag or a flag's value
+        val flagValues    = listOfNotNull(remoteOverride, branchOverride)
+        val positional    = args.filter { !it.startsWith("-") && it !in flagValues }.firstOrNull()
+        val openAll       = positional == "all"
+        val repoName      = if (openAll) null else positional
 
-        val repos = if (repoName != null) {
-            val match = config.findByNameOrAlias(repoName)
-            if (match == null) {
-                Printer.error("Repository '$repoName' not found in workspace config.")
-                val available = config.repositories.map { r ->
-                    if (r.aliases.isEmpty()) r.name
-                    else "${r.name} (${r.aliases.joinToString(", ")})"
+        // ── Resolve the candidate repo list ───────────────────────────────────
+        val repos = when {
+            repoName != null -> {
+                // Specific repo by name or alias
+                val match = config.findByNameOrAlias(repoName)
+                if (match == null) {
+                    Printer.error("Repository '$repoName' not found in workspace config.")
+                    val available = config.repositories.map { r ->
+                        if (r.aliases.isEmpty()) r.name
+                        else "${r.name} (${r.aliases.joinToString(", ")})"
+                    }
+                    Printer.info("Available: ${available.joinToString(", ")}")
+                    return 1
                 }
-                Printer.info("Available: ${available.joinToString(", ")}")
-                return 1
+                listOf(match)
             }
-            listOf(match)
-        } else {
-            config.repositories
+            openAll -> config.repositories
+            else -> {
+                // Default: only repos with commits ahead of their default branch
+                config.repositories.filter { repo ->
+                    val repoPath = context.resolveRepoPath(repo)
+                    FileUtils.isDirectory(repoPath) &&
+                        context.git.isGitRepository(repoPath) &&
+                        context.git.hasCommitsAheadOf(repoPath, baseBranch = repo.defaultBranch, defaultRemote = repo.defaultRemote)
+                }.also { filtered ->
+                    if (filtered.isEmpty()) {
+                        Printer.info("No repositories have commits ahead of their default branch.")
+                        Printer.info("Use 'ws open all' to open all repositories.")
+                        return 0
+                    }
+                }
+            }
         }
 
-        val headerLabel = if (repoName != null) "Open in Browser: $repoName" else "Open in Browser: ${config.name}"
+        val headerLabel = when {
+            repoName != null -> "Open in Browser: $repoName"
+            openAll          -> "Open in Browser: ${config.name} (all repos)"
+            else             -> "Open in Browser: ${config.name} (repos with active work)"
+        }
         Printer.header(headerLabel)
 
         var exitCode   = 0

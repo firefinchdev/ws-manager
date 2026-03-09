@@ -122,4 +122,15 @@ interface GitOperations {
 
     /** Get log of recent commits. */
     fun log(repoPath: String, count: Int = 10, oneline: Boolean = true): GitResult
+
+    /**
+     * Returns true if the currently checked-out branch has at least one commit
+     * that is NOT reachable from [baseBranch] (i.e., HEAD is ahead of baseBranch).
+     *
+     * Falls back to checking `origin/<baseBranch>` when [baseBranch] doesn't
+     * exist locally. Returns false when the repo is on the default branch itself
+     * or when neither ref can be resolved (e.g., fresh clone with no commits on
+     * the base branch yet).
+     */
+    fun hasCommitsAheadOf(repoPath: String, baseBranch: String, defaultRemote: String): Boolean
 }

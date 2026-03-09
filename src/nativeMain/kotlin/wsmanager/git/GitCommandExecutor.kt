@@ -1,5 +1,6 @@
 package wsmanager.git
 
+import wsmanager.cli.output.Printer
 import wsmanager.util.ProcessRunner
 
 /**
@@ -240,5 +241,19 @@ class GitCommandExecutor : GitOperations {
         val args = mutableListOf("log", "-n", count.toString())
         if (oneline) args.add("--oneline")
         return git(repoPath, *args.toTypedArray())
+    }
+
+    override fun hasCommitsAheadOf(repoPath: String, baseBranch: String, defaultRemote: String): Boolean {
+        // `git log <base>..HEAD --oneline` — lists commits on HEAD not reachable from base.
+        // Non-empty output means the current branch is ahead of baseBranch.
+        val local = git(repoPath, "log", "$baseBranch..HEAD", "--oneline")
+        if (local.success && local.output.isNotBlank()) return true
+
+        // baseBranch doesn't exist locally (e.g., never been checked out) —
+        // retry against the tracking ref on the default remote.
+        val remote = git(repoPath, "log", "$defaultRemote/$baseBranch..HEAD", "--oneline")
+        if (remote.success && remote.output.isNotBlank()) return true
+
+        return false
     }
 }

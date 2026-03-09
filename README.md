@@ -939,15 +939,20 @@ ws stash drop --index 2
 
 #### open
 
-Open one or all repositories in the browser using the remote URL.
+Open repositories in the browser using the remote URL.
 
 ```
-ws open [<repo>] [--remote <alias>] [--branch <branch>] [--print]
+ws open                               # only repos with active work (ahead of default branch)
+ws open all                           # all repositories
+ws open <repo>                        # a specific repository by name or alias
+ws open [all|<repo>] [--remote <alias>] [--branch <branch>] [--print]
 ```
 
-| Option | Short | Description |
+| Argument / Option | Short | Description |
 |---|---|---|
-| `<repo>` | | Repository name or alias to open (omit to open all repos) |
+| *(no arg)* | | Open only repos whose current branch has commits **ahead of their `default_branch`** |
+| `all` | | Open all repositories regardless of branch state |
+| `<repo>` | | Open a specific repository by name or alias |
 | `--remote <alias>` | | Use a specific remote's URL (default: each repo's `default_remote`) |
 | `--branch <branch>` | | Open at a specific branch (default: current local branch, or `default_branch` if not cloned) |
 | `--print` | | Print URLs to stdout instead of opening the browser |
@@ -955,6 +960,8 @@ ws open [<repo>] [--remote <alias>] [--branch <branch>] [--print]
 **Strategy:** n/a (read-only)
 
 Resolves the remote URL for each repository and converts it to a browser URL, then opens it using the system browser (`open` on macOS, `xdg-open` on Linux).
+
+The default mode (`ws open` with no args) is designed for **daily PR review** — it surfaces only the repositories where you have active feature work (commits on the current branch that aren't on `default_branch`), so you don't have to remember which repos you touched. Repos sitting on their default branch are silently skipped.
 
 **Supported providers:**
 
@@ -972,10 +979,14 @@ Both SSH (`git@github.com:org/repo.git`) and HTTPS (`https://github.com/org/repo
 You can use a repository's **alias** as the `<repo>` argument:
 
 ```bash
-# Open all repos in the browser at their current branch
+# Open repos with active work (current branch ahead of default_branch)
+# — skips repos sitting on their default branch unchanged
 ws open
 
-# Open a single repo by name or alias
+# Open ALL repos regardless of branch state
+ws open all
+
+# Open a single repo by name or alias (always opens, regardless of branch state)
 ws open api-gateway
 ws open api          # alias works too
 
@@ -985,8 +996,9 @@ ws open api --branch feature/payment-v2
 # Open using a different remote (e.g., upstream fork)
 ws open api --remote upstream
 
-# Just print the URLs (useful for scripting)
+# Print URLs without launching the browser (useful for scripting)
 ws open --print
+ws open all --print
 ws open api --print | pbcopy
 ```
 
@@ -1189,12 +1201,15 @@ ws checkout feature/payment-v2 --create
 # Check what's changed (shows branch + remote tracking status)
 ws status
 
-# Open the API repo in the browser to review a PR
+    # Open repos with active work in the browser (auto-filters to branches ahead of default)
+ws open
+
+# Open a specific repo by name or alias
 ws open api-gateway
 ws open api           # alias works too
 
 # Open all repos at the current feature branch
-ws open --branch feature/payment-v2
+ws open all --branch feature/payment-v2
 
 # Stash work-in-progress before switching context
 ws stash push --message "WIP: payment integration"
