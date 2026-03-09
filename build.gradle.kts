@@ -45,13 +45,12 @@ tasks.register("generateBuildConfig") {
 
 kotlin {
     val hostOs = System.getProperty("os.name")
-    val isArm64 = System.getProperty("os.arch") == "aarch64"
+    // Supported targets: macOS arm64 (Apple Silicon), Linux x64, Windows x64
     val nativeTarget = when {
-        hostOs == "Mac OS X" && isArm64 -> macosArm64("native")
-        hostOs == "Linux" && isArm64 -> linuxArm64("native")
-        hostOs == "Linux" && !isArm64 -> linuxX64("native")
-        hostOs.startsWith("Windows") -> mingwX64("native")
-        else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
+        hostOs == "Mac OS X"          -> macosArm64("native")
+        hostOs.startsWith("Linux")    -> linuxX64("native")
+        hostOs.startsWith("Windows")  -> mingwX64("native")
+        else -> throw GradleException("Host OS '$hostOs' is not supported.")
     }
 
     // Platform-specific source directory that provides the Ktor engine factory.

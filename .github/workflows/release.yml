@@ -15,12 +15,10 @@
 #
 # Pipeline
 # ────────
-#   build (matrix, 5 OS runners in parallel)
-#     ├── macos-latest     → ws-macos-arm64        (Apple Silicon)
-#     ├── macos-13         → ws-macos-x64           (Intel)
-#     ├── ubuntu-latest    → ws-linux-x64
-#     ├── ubuntu-24.04-arm → ws-linux-arm64         (GitHub ARM64 runner)
-#     └── windows-latest   → ws-windows-x64.exe
+#   build (matrix, 3 OS runners in parallel)
+#     ├── macos-latest   → ws-macos-arm64   (Apple Silicon)
+#     ├── ubuntu-latest  → ws-linux-x64
+#     └── windows-latest → ws-windows-x64.exe
 #           │
 #           ▼  (all upload artifacts)
 #   release (single runner)
@@ -57,25 +55,11 @@ jobs:
             binary_dst: ws-macos-arm64
             strip_cmd: strip -Sx build/bin/native/releaseExecutable/ws.kexe
 
-          # ── macOS Intel ─────────────────────────────────────────────────────
-          - os: macos-13
-            target: macos-x64
-            binary_src: build/bin/native/releaseExecutable/ws.kexe
-            binary_dst: ws-macos-x64
-            strip_cmd: strip -Sx build/bin/native/releaseExecutable/ws.kexe
-
           # ── Linux x86_64 ────────────────────────────────────────────────────
           - os: ubuntu-latest
             target: linux-x64
             binary_src: build/bin/native/releaseExecutable/ws.kexe
             binary_dst: ws-linux-x64
-            strip_cmd: strip -s build/bin/native/releaseExecutable/ws.kexe
-
-          # ── Linux ARM64 (GitHub-hosted ARM runner) ──────────────────────────
-          - os: ubuntu-24.04-arm
-            target: linux-arm64
-            binary_src: build/bin/native/releaseExecutable/ws.kexe
-            binary_dst: ws-linux-arm64
             strip_cmd: strip -s build/bin/native/releaseExecutable/ws.kexe
 
           # ── Windows x86_64 ──────────────────────────────────────────────────
@@ -258,23 +242,9 @@ jobs:
             sudo mv ws /usr/local/bin/ws
             ```
 
-            **macOS — Intel (x64)**
-            ```bash
-            curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-macos-x64
-            chmod +x ws
-            sudo mv ws /usr/local/bin/ws
-            ```
-
             **Linux — x86_64**
             ```bash
             curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-linux-x64
-            chmod +x ws
-            sudo mv ws /usr/local/bin/ws
-            ```
-
-            **Linux — arm64**
-            ```bash
-            curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-linux-arm64
             chmod +x ws
             sudo mv ws /usr/local/bin/ws
             ```

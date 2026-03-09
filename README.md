@@ -1287,9 +1287,7 @@ ws log --count 3
 | Platform | Architecture | Status |
 |---|---|---|
 | macOS | arm64 (Apple Silicon) | Supported |
-| macOS | x86_64 | Supported |
 | Linux | x86_64 | Supported |
-| Linux | arm64 | Supported |
 | Windows | x86_64 (MinGW) | Supported |
 
 The build automatically detects the host platform and compiles for it.
