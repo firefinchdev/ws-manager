@@ -45,22 +45,42 @@ tasks.register("generateBuildConfig") {
 
 kotlin {
     val hostOs = System.getProperty("os.name")
-    // Supported targets: macOS arm64 (Apple Silicon), Linux x64, Windows x64
-    val nativeTarget = when {
-        hostOs == "Mac OS X"          -> macosArm64("native")
-        hostOs.startsWith("Linux")    -> linuxX64("native")
-        hostOs.startsWith("Windows")  -> mingwX64("native")
+
+    // ── Target selection ────────────────────────────────────────────────────────
+    // Default target for the current host (used for local dev builds).
+    val defaultTarget = when {
+        hostOs == "Mac OS X"          -> "macosArm64"
+        hostOs.startsWith("Linux")    -> "linuxX64"
+        hostOs.startsWith("Windows")  -> "mingwX64"
         else -> throw GradleException("Host OS '$hostOs' is not supported.")
     }
 
-    // Platform-specific source directory that provides the Ktor engine factory.
-    // Each directory contains a single HttpClientFactory.kt file with
-    // createPlatformHttpClient() wired to the right Ktor engine for that OS.
+    // Pass -Ptarget=<name> to cross-compile from the current host:
+    //   macOS ARM  host  →  -Ptarget=macosX64     (produces Intel macOS binary)
+    //   Linux x64  host  →  -Ptarget=linuxArm64   (produces ARM64 Linux binary)
+    val targetName = (project.findProperty("target") as String?) ?: defaultTarget
+
+    val nativeTarget = when (targetName) {
+        "macosArm64" -> macosArm64("native")
+        "macosX64"   -> macosX64("native")
+        "linuxX64"   -> linuxX64("native")
+        "linuxArm64" -> linuxArm64("native")
+        "mingwX64"   -> mingwX64("native")
+        else -> throw GradleException(
+            "Unknown -Ptarget '$targetName'. Valid: macosArm64, macosX64, linuxX64, linuxArm64, mingwX64"
+        )
+    }
+
+    // ── Platform source directory ───────────────────────────────────────────────
+    // Selected by TARGET (not host) so cross-compilation picks the right APIs:
+    //   macOS target  → Darwin Ktor engine + macOS PlatformUtils
+    //   Linux target  → CIO   Ktor engine + Linux  PlatformUtils
+    //   Windows target→ WinHttp             + Windows PlatformUtils
     val platformSrcDir = when {
-        hostOs == "Mac OS X"           -> "src/platform/macos/kotlin"
-        hostOs.startsWith("Linux")     -> "src/platform/linux/kotlin"
-        hostOs.startsWith("Windows")   -> "src/platform/windows/kotlin"
-        else -> throw GradleException("Unsupported OS: $hostOs")
+        targetName.startsWith("macos")  -> "src/platform/macos/kotlin"
+        targetName.startsWith("linux")  -> "src/platform/linux/kotlin"
+        targetName.startsWith("mingw")  -> "src/platform/windows/kotlin"
+        else -> throw GradleException("No platform source dir for target: $targetName")
     }
 
     sourceSets {
@@ -72,11 +92,11 @@ kotlin {
                 implementation(libs.kotlinx.serialization.json)
                 // Ktor core — platform-agnostic HTTP client API
                 implementation(libs.ktor.client.core)
-                // Platform-specific Ktor engine — only one is compiled per build
+                // Platform-specific Ktor engine — chosen by target, not host OS
                 when {
-                    hostOs == "Mac OS X"         -> implementation(libs.ktor.client.darwin)
-                    hostOs.startsWith("Linux")   -> implementation(libs.ktor.client.cio)
-                    hostOs.startsWith("Windows") -> implementation(libs.ktor.client.winhttp)
+                    targetName.startsWith("macos")  -> implementation(libs.ktor.client.darwin)
+                    targetName.startsWith("linux")  -> implementation(libs.ktor.client.cio)
+                    targetName.startsWith("mingw")  -> implementation(libs.ktor.client.winhttp)
                 }
             }
         }
@@ -106,9 +126,17 @@ kotlin {
 // symbols while keeping the global symbol table intact (required by dyld).
 // On Linux `strip -s` removes everything safely from a self-contained executable.
 val stripReleaseExecutable by tasks.registering(Exec::class) {
-    val hostOs = System.getProperty("os.name")
-    // Kotlin/Native produces .exe on Windows/MinGW, .kexe on macOS and Linux
-    val binaryName = if (hostOs.startsWith("Windows")) "ws.exe" else "ws.kexe"
+    val hostOs    = System.getProperty("os.name")
+    val defaultT  = when {
+        hostOs == "Mac OS X"         -> "macosArm64"
+        hostOs.startsWith("Linux")   -> "linuxX64"
+        hostOs.startsWith("Windows") -> "mingwX64"
+        else -> "unknown"
+    }
+    val targetName = (project.findProperty("target") as String?) ?: defaultT
+
+    // Kotlin/Native produces .exe on Windows/MinGW, .kexe everywhere else
+    val binaryName = if (targetName == "mingwX64") "ws.exe" else "ws.kexe"
     val binaryPath = layout.buildDirectory
         .file("bin/native/releaseExecutable/$binaryName")
         .get().asFile
@@ -116,11 +144,15 @@ val stripReleaseExecutable by tasks.registering(Exec::class) {
     dependsOn("linkReleaseExecutableNative")
 
     val stripArgs: List<String> = when {
-        hostOs == "Mac OS X"        -> listOf("strip", "-Sx", binaryPath.absolutePath)
-        hostOs.startsWith("Linux")  -> listOf("strip", "-s",  binaryPath.absolutePath)
-        else                        -> listOf("strip",        binaryPath.absolutePath)
+        targetName.startsWith("macos")  -> listOf("strip", "-Sx", binaryPath.absolutePath)
+        targetName.startsWith("linux")  -> listOf("strip", "-s",  binaryPath.absolutePath)
+        else                            -> listOf("strip",        binaryPath.absolutePath)
     }
     commandLine(stripArgs)
+
+    // strip may fail when cross-compiling (host strip is architecture-specific).
+    // CI handles stripping in its own step; this task is best-effort locally.
+    isIgnoreExitValue = true
 
     doFirst {
         if (!binaryPath.exists()) {

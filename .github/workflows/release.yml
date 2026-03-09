@@ -15,10 +15,12 @@
 #
 # Pipeline
 # ────────
-#   build (matrix, 3 OS runners in parallel)
-#     ├── macos-latest   → ws-macos-arm64   (Apple Silicon)
-#     ├── ubuntu-latest  → ws-linux-x64
-#     └── windows-latest → ws-windows-x64.exe
+#   build (matrix, 5 jobs on 3 runners — 2 jobs use cross-compilation)
+#     ├── macos-latest   -Ptarget=macosArm64  → ws-macos-arm64   (native)
+#     ├── macos-latest   -Ptarget=macosX64    → ws-macos-x64     (cross: ARM host → Intel binary)
+#     ├── ubuntu-latest  -Ptarget=linuxX64    → ws-linux-x64     (native)
+#     ├── ubuntu-latest  -Ptarget=linuxArm64  → ws-linux-arm64   (cross: x64 host → ARM64 binary)
+#     └── windows-latest -Ptarget=mingwX64    → ws-windows-x64.exe (native)
 #           │
 #           ▼  (all upload artifacts)
 #   release (single runner)
@@ -48,24 +50,47 @@ jobs:
       fail-fast: false          # build all platforms even if one fails
       matrix:
         include:
-          # ── macOS Apple Silicon ─────────────────────────────────────────────
+          # ── macOS Apple Silicon — native arm64 ──────────────────────────────
           - os: macos-latest
             target: macos-arm64
+            gradle_target: macosArm64
             binary_src: build/bin/native/releaseExecutable/ws.kexe
             binary_dst: ws-macos-arm64
             strip_cmd: strip -Sx build/bin/native/releaseExecutable/ws.kexe
 
-          # ── Linux x86_64 ────────────────────────────────────────────────────
+          # ── macOS Intel — cross-compiled on Apple Silicon host ───────────────
+          # K/N can produce x64 Mach-O binaries from an arm64 host via LLVM.
+          # macOS `strip` is LLVM-based and handles x64 binaries on an arm64 host.
+          - os: macos-latest
+            target: macos-x64
+            gradle_target: macosX64
+            binary_src: build/bin/native/releaseExecutable/ws.kexe
+            binary_dst: ws-macos-x64
+            strip_cmd: strip -Sx build/bin/native/releaseExecutable/ws.kexe
+
+          # ── Linux x86_64 — native x64 ───────────────────────────────────────
           - os: ubuntu-latest
             target: linux-x64
+            gradle_target: linuxX64
             binary_src: build/bin/native/releaseExecutable/ws.kexe
             binary_dst: ws-linux-x64
             strip_cmd: strip -s build/bin/native/releaseExecutable/ws.kexe
 
-          # ── Windows x86_64 ──────────────────────────────────────────────────
+          # ── Linux ARM64 — cross-compiled on x86_64 host ─────────────────────
+          # K/N downloads its own ARM64 sysroot/toolchain; no extra apt packages needed.
+          # Native `strip` on the x64 runner can't strip ARM64 ELF — skip it.
+          - os: ubuntu-latest
+            target: linux-arm64
+            gradle_target: linuxArm64
+            binary_src: build/bin/native/releaseExecutable/ws.kexe
+            binary_dst: ws-linux-arm64
+            strip_cmd: ""          # stripped via continue-on-error below
+
+          # ── Windows x86_64 — native ─────────────────────────────────────────
           # Kotlin/Native on MinGW produces ws.exe, NOT ws.kexe (.kexe is POSIX-only)
           - os: windows-latest
             target: windows-x64
+            gradle_target: mingwX64
             binary_src: build/bin/native/releaseExecutable/ws.exe
             binary_dst: ws-windows-x64.exe
             strip_cmd: strip build/bin/native/releaseExecutable/ws.exe
@@ -108,18 +133,22 @@ jobs:
 
       # ── Build ─────────────────────────────────────────────────────────────────
       - name: Build release binary
-        run: ./gradlew linkReleaseExecutableNative
+        # -Ptarget selects the K/N target; allows cross-compilation on the same runner:
+        #   macos-latest  can produce both macosArm64 and macosX64 binaries
+        #   ubuntu-latest can produce both linuxX64   and linuxArm64 binaries
+        run: ./gradlew linkReleaseExecutableNative -Ptarget=${{ matrix.gradle_target }}
         shell: bash
 
       # ── Strip debug symbols ───────────────────────────────────────────────────
-      # Runs the same strip command that build.gradle.kts uses locally.
-      # This is intentionally done here rather than via the Gradle strip task so
-      # the step is visible in the CI log and failures are easy to diagnose.
+      # Cross-compiled targets (linux-arm64, windows-x64) cannot be stripped by the
+      # host-native `strip` binary — those steps continue-on-error so the pipeline
+      # does not fail.  macOS cross (x64 on ARM) works because macOS strip is
+      # LLVM-based and handles multiple architectures.
       - name: Strip binary
+        if: matrix.strip_cmd != ''
         run: ${{ matrix.strip_cmd }}
         shell: bash
-        # 'strip' may not be available on older Windows images — continue on error
-        continue-on-error: ${{ matrix.target == 'windows-x64' }}
+        continue-on-error: ${{ matrix.target == 'windows-x64' || matrix.target == 'linux-arm64' }}
 
       # ── Rename and checksum ───────────────────────────────────────────────────
       - name: Rename binary and generate SHA-256
@@ -238,15 +267,25 @@ jobs:
             **macOS — Apple Silicon (arm64)**
             ```bash
             curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-macos-arm64
-            chmod +x ws
-            sudo mv ws /usr/local/bin/ws
+            chmod +x ws && sudo mv ws /usr/local/bin/ws
+            ```
+
+            **macOS — Intel (x64)**
+            ```bash
+            curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-macos-x64
+            chmod +x ws && sudo mv ws /usr/local/bin/ws
             ```
 
             **Linux — x86_64**
             ```bash
             curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-linux-x64
-            chmod +x ws
-            sudo mv ws /usr/local/bin/ws
+            chmod +x ws && sudo mv ws /usr/local/bin/ws
+            ```
+
+            **Linux — arm64**
+            ```bash
+            curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-linux-arm64
+            chmod +x ws && sudo mv ws /usr/local/bin/ws
             ```
 
             **Windows — x64**
