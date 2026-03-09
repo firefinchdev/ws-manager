@@ -58,6 +58,7 @@
 - **JSON configuration** with strict validation before execution
 - **`.ws/` workspace directory** &mdash; config lives in `.ws/workspace.json` at the workspace root; keeps workspace metadata separate from repo directories
 - **Workspace auto-discovery** &mdash; finds `.ws/workspace.json` by walking up the directory tree, just like `git` finds `.git`
+- **Remote workspace initialization** &mdash; `ws init --url` fetches config from a Git manifest repo or raw URL, mirroring `repo init -u`
 - **Repository aliases** &mdash; define short names for repos; use any alias anywhere a repo name is accepted
 - **`describe`** &mdash; inspect the full workspace config: repos, remotes, aliases, clone status, all in one view
 - **`refresh`** &mdash; one-command "clean slate" for starting a new task: discard changes, checkout default branches, sync remotes, pull latest
@@ -66,7 +67,7 @@
 - **Colored terminal output** with progress indicators and structured summaries
 - **Shell command execution** across all repos via `foreach`
 - **Cross-platform** &mdash; compiles to native binary for macOS, Linux, and Windows
-- **Zero runtime dependencies** &mdash; single self-contained binary
+- **Zero runtime dependencies** &mdash; single self-contained binary; HTTP downloads use Ktor (built in), not `curl`
 
 ---
 
@@ -97,12 +98,14 @@ cp build/bin/native/releaseExecutable/ws.kexe /usr/local/bin/ws
 ## Quick Start
 
 ```bash
-# 1. Initialize a new workspace (creates .ws/workspace.json)
+# 1a. Initialize from a shared manifest repo (like repo init -u)
+ws init --url https://github.com/myorg/workspace-manifests.git
+
+# 1b. Or create a blank config and edit manually
 ws init --name my-project
+# → edit .ws/workspace.json to add your repositories (see Configuration below)
 
-# 2. Edit .ws/workspace.json to add your repositories (see Configuration below)
-
-# 3. Clone all repositories
+# 2. Clone all repositories
 ws clone
 
 # 4. Inspect the workspace — repos, remotes, aliases, clone status
@@ -311,23 +314,77 @@ ws -c /path/to/other/workspace.json status
 
 #### init
 
-Initialize a new workspace configuration file.
+Initialize a new workspace configuration.
+
+Two modes are supported: creating a local sample config for manual editing, or fetching a real config from a hosted URL or Git manifest repository (similar to `repo init -u` from Android's `repo` tool).
 
 ```
 ws init [--name <name>]
+ws init --url <url> [--branch <branch>] [--file <path>] [--force]
 ```
+
+#### Local mode (default)
 
 | Option | Description |
 |---|---|
-| `--name <name>` | Workspace name (default: `"my-workspace"`) |
+| `--name <name>` | Workspace name for the sample config (default: `"my-workspace"`) |
 
-Creates the `.ws/` directory and writes `.ws/workspace.json` with a sample repository entry. Edit this file to define your actual repositories before running other commands.
+Creates the `.ws/` directory and writes `.ws/workspace.json` with a sample repository entry. Edit the file to define your actual repositories before running other commands.
 
 ```bash
 ws init --name my-platform
 # → created .ws/
 # → created .ws/workspace.json
 ```
+
+#### Remote mode (`--url`)
+
+| Option | Short | Description |
+|---|---|---|
+| `--url <url>` | `-u` | URL to fetch the workspace config from (see auto-detection below) |
+| `--branch <branch>` | `-b` | Branch to checkout when the URL is a Git repository (default: remote HEAD) |
+| `--file <path>` | | Path of the config file inside the Git repository (default: `workspace.json`) |
+| `--force` | `-f` | Overwrite an existing `.ws/workspace.json` |
+
+`ws` auto-detects the fetch strategy from the URL shape:
+
+| URL shape | Strategy |
+|---|---|
+| Ends with `.json`, contains `/raw/`, or is a `raw.githubusercontent.com` / `raw.gitlab.*` URL | **Direct HTTPS download** via Ktor |
+| Everything else (GitHub/GitLab repo URLs, SSH `git@` URLs, local paths, etc.) | **Git clone** (`git clone --depth=1`) |
+
+**Direct download mode** uses Ktor's built-in HTTP client — no `curl`, `wget`, or any other system tool is required. The HTTP engine is selected automatically per platform:
+
+| Platform | HTTP engine | Underlying stack |
+|---|---|---|
+| macOS | Ktor Darwin | NSURLSession (OS-native, full TLS) |
+| Linux | Ktor CIO | Pure-Kotlin coroutines + POSIX sockets |
+| Windows | Ktor WinHttp | Windows HTTP Services API (OS-native, full TLS) |
+
+**Git manifest mode** clones the repository into a temporary directory, extracts the config file, validates it, installs it to `.ws/workspace.json`, then deletes the temp clone. No permanent clone is left on disk.
+
+The fetched config is validated against all workspace rules before being written. If validation fails, the existing config is never modified.
+
+```bash
+# From a Git manifest repository (like repo init -u)
+ws init --url https://github.com/myorg/workspace-manifests.git
+
+# Specify a branch and a non-default config file
+ws init --url https://github.com/myorg/workspace-manifests.git \
+        --branch release/2025 \
+        --file configs/platform-services.json
+
+# From a raw JSON URL (GitHub raw, GitLab raw, self-hosted)
+ws init --url https://raw.githubusercontent.com/myorg/configs/main/workspace.json
+
+# SSH remote
+ws init --url git@github.com:myorg/workspace-manifests.git
+
+# Overwrite an existing config
+ws init --url https://github.com/myorg/workspace-manifests.git --force
+```
+
+After remote init, run `ws describe` to review the fetched config and `ws clone` to clone all defined repositories.
 
 ---
 
@@ -1089,13 +1146,14 @@ src/nativeMain/kotlin/wsmanager/
 ### Setting up a new workspace
 
 ```bash
-# Create workspace config (creates .ws/workspace.json)
+# Option A: fetch config from a shared manifest repository (team onboarding)
+ws init --url https://github.com/myorg/workspace-manifests.git
+# ws clone all repos immediately after
+ws clone
+
+# Option B: create a blank config and define repos manually
 ws init --name platform-services
-
-# Edit .ws/workspace.json to add all your repos
-# (See Configuration section above)
-
-# Clone everything
+# Edit .ws/workspace.json to add all your repos (see Configuration section)
 ws clone
 
 # Verify all repos are set up and inspect their config

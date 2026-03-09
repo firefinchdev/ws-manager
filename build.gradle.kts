@@ -54,12 +54,31 @@ kotlin {
         else -> throw GradleException("Host OS is not supported in Kotlin/Native.")
     }
 
+    // Platform-specific source directory that provides the Ktor engine factory.
+    // Each directory contains a single HttpClientFactory.kt file with
+    // createPlatformHttpClient() wired to the right Ktor engine for that OS.
+    val platformSrcDir = when {
+        hostOs == "Mac OS X"           -> "src/platform/macos/kotlin"
+        hostOs.startsWith("Linux")     -> "src/platform/linux/kotlin"
+        hostOs.startsWith("Windows")   -> "src/platform/windows/kotlin"
+        else -> throw GradleException("Unsupported OS: $hostOs")
+    }
+
     sourceSets {
         val nativeMain by getting {
             kotlin.srcDir(layout.buildDirectory.dir("generated/src/nativeMain/kotlin"))
+            kotlin.srcDir(platformSrcDir)
             dependencies {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
+                // Ktor core — platform-agnostic HTTP client API
+                implementation(libs.ktor.client.core)
+                // Platform-specific Ktor engine — only one is compiled per build
+                when {
+                    hostOs == "Mac OS X"         -> implementation(libs.ktor.client.darwin)
+                    hostOs.startsWith("Linux")   -> implementation(libs.ktor.client.cio)
+                    hostOs.startsWith("Windows") -> implementation(libs.ktor.client.winhttp)
+                }
             }
         }
         val nativeTest by getting {

@@ -226,7 +226,7 @@ class WsManagerApp {
         println("    ws ${c.cyan("<command>")} [options]")
         println()
         println(c.bold("  WORKSPACE COMMANDS:"))
-        printCommandEntry("init",     "Initialize a new workspace configuration")
+        printCommandEntry("init",     "Initialize workspace config (--url to fetch from a URL or git repo)")
         printCommandEntry("describe", "Describe the workspace config and all repositories")
         printCommandEntry("clone",    "Clone all repositories in the workspace")
         printCommandEntry("sync",     "Clone missing repos and update existing ones")
