@@ -8,21 +8,32 @@ import wsmanager.util.FileUtils
 /**
  * Pull from remote across all repositories.
  * Uses BEST_EFFORT strategy (safe read-update operation).
+ *
+ * Options
+ * ──────────────────────────────────────────────────────────────────────────
+ *   --rebase          Use rebase instead of merge
+ *   --remote <alias>  Pull from a specific remote (default: each repo's default_remote)
+ *   --current | -c    Explicitly pass the current branch name to git pull.
+ *                     Instead of `git pull origin`, runs `git pull origin <branch>`.
+ *                     Useful when the upstream tracking ref is not configured, or when
+ *                     you want to be explicit about which branch is being pulled.
  */
 class PullCommand : Command {
     override val name = "pull"
     override val description = "Pull from remote across all repositories"
-    override val usage = "ws pull [--rebase] [--remote <remote>]"
+    override val usage = "ws pull [--rebase] [--remote <remote>] [--current]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()
         val repos = config.repositories
-        val useRebase = args.contains("--rebase")
-        val remote = getArgValue(args, "--remote")
+        val useRebase    = args.contains("--rebase")
+        val pullCurrent  = args.contains("--current") || args.contains("-c")
+        val remote       = getArgValue(args, "--remote")
 
         val label = buildString {
             append("Pull")
-            if (useRebase) append(" --rebase")
+            if (useRebase)   append(" --rebase")
+            if (pullCurrent) append(" (current branch)")
         }
         Printer.operationStart(label, repos.size)
 
@@ -36,10 +47,23 @@ class PullCommand : Command {
                     return@executeBestEffort wsmanager.git.GitResult.failure("Repository not found at $repoPath")
                 }
 
+                // When --current is set, resolve the live branch name for this repo
+                // and pass it explicitly to git pull so the command is unambiguous.
+                val branch: String? = if (pullCurrent) {
+                    val branchResult = context.git.currentBranch(repoPath)
+                    if (!branchResult.success || branchResult.output.isBlank()) {
+                        return@executeBestEffort wsmanager.git.GitResult.failure(
+                            "Could not determine current branch: ${branchResult.output}"
+                        )
+                    }
+                    branchResult.output
+                } else null
+
                 context.git.pull(
                     repoPath = repoPath,
-                    remote = remote ?: repo.defaultRemote,
-                    rebase = useRebase
+                    remote   = remote ?: repo.defaultRemote,
+                    branch   = branch,
+                    rebase   = useRebase
                 )
             },
             onProgress = { _, result -> Printer.repoResult(result) }

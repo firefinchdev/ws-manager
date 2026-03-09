@@ -653,22 +653,31 @@ This is useful after finishing work on a feature branch and wanting to return ev
 Pull from remote across all repositories.
 
 ```
-ws pull [--rebase] [--remote <remote>]
+ws pull [--rebase] [--remote <remote>] [--current]
 ```
 
-| Option | Description |
-|---|---|
-| `--rebase` | Use rebase instead of merge |
-| `--remote <remote>` | Pull from a specific remote (default: each repo's `default_remote`) |
+| Option | Short | Description |
+|---|---|---|
+| `--rebase` | | Use rebase instead of merge |
+| `--remote <remote>` | | Pull from a specific remote (default: each repo's `default_remote`) |
+| `--current` | `-c` | Resolve each repo's live branch name and pass it explicitly to `git pull <remote> <branch>`. Useful when the upstream tracking ref is not configured, or when you want the command to be unambiguous about which branch is pulled. |
 
 **Strategy:** BEST_EFFORT
 
+Without `--current`, the command runs `git pull <remote>` and lets git resolve the tracking ref. With `--current`, it runs `git pull <remote> <branch>` where `<branch>` is the live checked-out branch for each repo.
+
 ```bash
-# Pull with rebase from default remotes
+# Pull with rebase from default remotes (uses tracking ref)
 ws pull --rebase
 
 # Pull from upstream remote
 ws pull --remote upstream
+
+# Explicitly pull the current branch in each repo
+ws pull --current
+
+# Combine: rebase + explicit current branch
+ws pull --current --rebase
 ```
 
 ---

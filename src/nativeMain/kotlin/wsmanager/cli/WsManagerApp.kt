@@ -238,7 +238,7 @@ class WsManagerApp {
         println()
         println(c.bold("  GIT COMMANDS:"))
         printCommandEntry("checkout", "Checkout a branch across all repositories (--default for per-repo default)")
-        printCommandEntry("pull", "Pull from remote across all repositories")
+        printCommandEntry("pull", "Pull from remote across all repositories (--current to pull live branch explicitly)")
         printCommandEntry("push", "Push to remote across all repositories")
         printCommandEntry("fetch", "Fetch from remote across all repositories")
         printCommandEntry("merge", "Merge a branch across all repositories")
