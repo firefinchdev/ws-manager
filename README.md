@@ -73,24 +73,89 @@
 
 ## Installation
 
-### Building from Source
-
-Requires JDK 11+ (for Gradle build only; the output binary has no JVM dependency).
+### macOS & Linux — one-liner
 
 ```bash
-git clone <repo-url> ws-manager
+curl -fsSL https://raw.githubusercontent.com/firefinchdev/ws-manager/main/install.sh | bash
+```
+
+The script auto-detects your platform (macOS arm64/x64, Linux x64/arm64), downloads the
+correct pre-built binary from the [latest GitHub Release](https://github.com/firefinchdev/ws-manager/releases/latest),
+verifies the SHA-256 checksum, and installs the binary to `/usr/local/bin/ws`
+(or `~/.local/bin/ws` if root is unavailable).
+
+**Install a specific version:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/firefinchdev/ws-manager/main/install.sh | bash -s -- --version v1.2.3
+```
+
+**Install to a custom directory:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/firefinchdev/ws-manager/main/install.sh | bash -s -- --dir ~/.bin
+```
+
+---
+
+### Windows — PowerShell
+
+Run in a PowerShell terminal (no administrator required):
+
+```powershell
+irm https://raw.githubusercontent.com/firefinchdev/ws-manager/main/install.ps1 | iex
+```
+
+The script downloads `ws-windows-x64.exe`, verifies the checksum, installs it to
+`%LOCALAPPDATA%\Programs\ws-manager\ws.exe`, and adds the directory to your User `PATH`.
+
+---
+
+### Manual download
+
+Download the binary for your platform directly from
+[GitHub Releases](https://github.com/firefinchdev/ws-manager/releases/latest),
+make it executable, and place it on your `$PATH`.
+
+| Platform | Binary |
+|---|---|
+| macOS Apple Silicon | `ws-macos-arm64` |
+| macOS Intel | `ws-macos-x64` |
+| Linux x86_64 | `ws-linux-x64` |
+| Linux arm64 | `ws-linux-arm64` |
+| Windows x64 | `ws-windows-x64.exe` |
+
+Each binary ships with a companion `.sha256` checksum file. Verify after downloading:
+
+```bash
+# macOS / Linux
+sha256sum -c ws-linux-x64.sha256    # Linux
+shasum -a 256 -c ws-macos-arm64.sha256  # macOS
+```
+
+---
+
+### Building from source
+
+Requires JDK 11+ (Gradle build only; the output binary has no JVM dependency).
+
+```bash
+git clone https://github.com/firefinchdev/ws-manager.git
 cd ws-manager
 ./gradlew nativeBinaries
 ```
 
-The binary is produced at:
-- **Release**: `build/bin/native/releaseExecutable/ws.kexe`
-- **Debug**: `build/bin/native/debugExecutable/ws.kexe`
-
-Copy the binary to a location on your `$PATH`:
+The release binary is produced at `build/bin/native/releaseExecutable/ws.kexe`
+(or `ws.exe` on Windows). Copy it to a directory on your `$PATH`:
 
 ```bash
 cp build/bin/native/releaseExecutable/ws.kexe /usr/local/bin/ws
+```
+
+To cross-compile (e.g. produce a Linux ARM64 binary on a Linux x64 host):
+
+```bash
+./gradlew linkReleaseExecutableNative -Ptarget=linuxArm64
 ```
 
 ---
