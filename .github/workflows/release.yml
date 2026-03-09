@@ -79,11 +79,12 @@ jobs:
             strip_cmd: strip -s build/bin/native/releaseExecutable/ws.kexe
 
           # ── Windows x86_64 ──────────────────────────────────────────────────
+          # Kotlin/Native on MinGW produces ws.exe, NOT ws.kexe (.kexe is POSIX-only)
           - os: windows-latest
             target: windows-x64
-            binary_src: build/bin/native/releaseExecutable/ws.kexe
+            binary_src: build/bin/native/releaseExecutable/ws.exe
             binary_dst: ws-windows-x64.exe
-            strip_cmd: strip build/bin/native/releaseExecutable/ws.kexe
+            strip_cmd: strip build/bin/native/releaseExecutable/ws.exe
 
     env:
       GRADLE_OPTS: >-
