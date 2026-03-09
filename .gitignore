@@ -1,12 +1,6 @@
 # Gradle
 .gradle/
 build/
-!gradle/wrapper/gradle-wrapper.jar
-!gradle/wrapper/gradle-wrapper.properties
-
-# Gradle Wrapper (keep scripts, ignore JAR)
-gradlew
-gradlew.bat
 
 # IDE - IntelliJ IDEA
 .idea/

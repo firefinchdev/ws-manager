@@ -1,0 +1,120 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# bump-version.yml
+#
+# Manual workflow that bumps version.properties, commits the change, pushes an
+# annotated git tag, then EXPLICITLY dispatches release.yml.
+#
+# Why explicit dispatch and not relying on the tag push?
+# ──────────────────────────────────────────────────────
+# GitHub intentionally prevents a workflow that runs with GITHUB_TOKEN from
+# triggering other workflows via push/tag events (to avoid infinite loops).
+# Calling `gh workflow run` via the workflow_dispatch API is not subject to
+# this restriction — GITHUB_TOKEN CAN trigger workflow_dispatch.
+#
+# Usage
+# ─────
+#   Actions → "Bump Version" → Run workflow
+#   Input:  patch | minor | major | <explicit e.g. 1.2.3>
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: >
+          Version bump: patch | minor | major | <explicit e.g. 1.2.3>
+        required: true
+        default: patch
+
+permissions:
+  contents: write   # push commits + tags
+  actions: write    # dispatch release.yml via workflow_dispatch API
+
+jobs:
+  bump:
+    name: Bump version.properties
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── 2. Read current version ─────────────────────────────────────────────────
+      - name: Read current version
+        id: current
+        run: |
+          VERSION=$(grep '^version=' version.properties | cut -d= -f2 | tr -d '[:space:]')
+          echo "Current version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      # ── 3. Compute new version ───────────────────────────────────────────────────
+      - name: Compute new version
+        id: new
+        run: |
+          CURRENT="${{ steps.current.outputs.version }}"
+          BUMP="${{ github.event.inputs.bump }}"
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          # Accept an explicit semver string (e.g. "2.0.0") as-is
+          if [[ "$BUMP" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            NEW="$BUMP"
+          elif [[ "$BUMP" == "major" ]]; then
+            NEW="$((MAJOR + 1)).0.0"
+          elif [[ "$BUMP" == "minor" ]]; then
+            NEW="$MAJOR.$((MINOR + 1)).0"
+          else
+            # Default: patch
+            NEW="$MAJOR.$MINOR.$((PATCH + 1))"
+          fi
+
+          echo "New version: $NEW"
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+
+      # ── 4. Update version.properties ─────────────────────────────────────────────
+      - name: Update version.properties
+        run: |
+          sed -i "s/^version=.*/version=${{ steps.new.outputs.version }}/" version.properties
+          echo "--- version.properties ---"
+          cat version.properties
+
+      # ── 5. Commit, tag, and push ──────────────────────────────────────────────────
+      - name: Commit and tag
+        id: tag
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add version.properties
+          git commit -m "chore: bump version to ${{ steps.new.outputs.version }}"
+
+          TAG="v${{ steps.new.outputs.version }}"
+          git tag -a "$TAG" -m "Release $TAG"
+
+          git push origin HEAD:"${{ github.ref_name }}"
+          git push origin "$TAG"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "✓ Pushed commit and tag $TAG"
+
+      # ── 6. Dispatch release.yml ───────────────────────────────────────────────────
+      # GITHUB_TOKEN CAN trigger workflow_dispatch — it just cannot trigger push/tag
+      # events automatically.  We call the API explicitly here so release.yml runs
+      # from the exact tag ref that was just created.
+      - name: Dispatch release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          echo "Dispatching release.yml for ref: $TAG"
+
+          gh workflow run release.yml \
+            --repo "${{ github.repository }}" \
+            --ref  "$TAG"
+
+          echo "✓ release.yml dispatched — check the Actions tab for progress."

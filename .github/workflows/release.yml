@@ -1,0 +1,292 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# release.yml
+#
+# Two trigger paths:
+#   1. workflow_dispatch (--ref vX.Y.Z)
+#      Called explicitly by bump-version.yml after it pushes the tag.
+#      GITHUB_TOKEN can trigger workflow_dispatch; it cannot trigger push events.
+#
+#   2. push: tags: v[0-9]*
+#      Fires when a developer pushes a tag manually from their machine.
+#      Does NOT fire when GITHUB_TOKEN pushes the tag (GitHub restriction).
+#
+# In both cases github.ref_name resolves to the tag (e.g. "v1.2.3"), so all
+# downstream steps work identically regardless of how the workflow was started.
+#
+# Pipeline
+# ────────
+#   build (matrix, 5 OS runners in parallel)
+#     ├── macos-latest     → ws-macos-arm64        (Apple Silicon)
+#     ├── macos-13         → ws-macos-x64           (Intel)
+#     ├── ubuntu-latest    → ws-linux-x64
+#     ├── ubuntu-24.04-arm → ws-linux-arm64         (GitHub ARM64 runner)
+#     └── windows-latest   → ws-windows-x64.exe
+#           │
+#           ▼  (all upload artifacts)
+#   release (single runner)
+#     └── Download all artifacts → Create GitHub Release with binaries attached
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Release
+
+on:
+  # Path 1: dispatched explicitly by bump-version.yml (or manually)
+  workflow_dispatch:
+
+  # Path 2: developer pushes a tag manually (not via GITHUB_TOKEN)
+  push:
+    tags:
+      - 'v[0-9]*'
+
+permissions:
+  contents: write   # needed to create GitHub Releases
+
+# ── Build jobs ────────────────────────────────────────────────────────────────
+jobs:
+  build:
+    name: Build · ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false          # build all platforms even if one fails
+      matrix:
+        include:
+          # ── macOS Apple Silicon ─────────────────────────────────────────────
+          - os: macos-latest
+            target: macos-arm64
+            binary_src: build/bin/native/releaseExecutable/ws.kexe
+            binary_dst: ws-macos-arm64
+            strip_cmd: strip -Sx build/bin/native/releaseExecutable/ws.kexe
+
+          # ── macOS Intel ─────────────────────────────────────────────────────
+          - os: macos-13
+            target: macos-x64
+            binary_src: build/bin/native/releaseExecutable/ws.kexe
+            binary_dst: ws-macos-x64
+            strip_cmd: strip -Sx build/bin/native/releaseExecutable/ws.kexe
+
+          # ── Linux x86_64 ────────────────────────────────────────────────────
+          - os: ubuntu-latest
+            target: linux-x64
+            binary_src: build/bin/native/releaseExecutable/ws.kexe
+            binary_dst: ws-linux-x64
+            strip_cmd: strip -s build/bin/native/releaseExecutable/ws.kexe
+
+          # ── Linux ARM64 (GitHub-hosted ARM runner) ──────────────────────────
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+            binary_src: build/bin/native/releaseExecutable/ws.kexe
+            binary_dst: ws-linux-arm64
+            strip_cmd: strip -s build/bin/native/releaseExecutable/ws.kexe
+
+          # ── Windows x86_64 ──────────────────────────────────────────────────
+          - os: windows-latest
+            target: windows-x64
+            binary_src: build/bin/native/releaseExecutable/ws.kexe
+            binary_dst: ws-windows-x64.exe
+            strip_cmd: strip build/bin/native/releaseExecutable/ws.kexe
+
+    env:
+      GRADLE_OPTS: >-
+        -Dorg.gradle.jvmargs=-Xmx4g
+        -Dorg.gradle.daemon=false
+        -Dorg.gradle.parallel=false
+        -Dkotlin.incremental=false
+
+    steps:
+      # ── Validate tag ref ───────────────────────────────────────────────────────
+      - name: Validate tag ref
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF_NAME" != v* ]]; then
+            echo "::error::Build job must run from a version tag. Got: $GITHUB_REF_NAME"
+            exit 1
+          fi
+          echo "Building for tag: $GITHUB_REF_NAME"
+
+      # ── Checkout ──────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── JDK ───────────────────────────────────────────────────────────────────
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # ── Gradle + Kotlin Native cache ──────────────────────────────────────────
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # Cache the Kotlin Native toolchain (~600 MB) across runs
+          cache-read-only: false
+
+      # ── Build ─────────────────────────────────────────────────────────────────
+      - name: Build release binary
+        run: ./gradlew linkReleaseExecutableNative
+        shell: bash
+
+      # ── Strip debug symbols ───────────────────────────────────────────────────
+      # Runs the same strip command that build.gradle.kts uses locally.
+      # This is intentionally done here rather than via the Gradle strip task so
+      # the step is visible in the CI log and failures are easy to diagnose.
+      - name: Strip binary
+        run: ${{ matrix.strip_cmd }}
+        shell: bash
+        # 'strip' may not be available on older Windows images — continue on error
+        continue-on-error: ${{ matrix.target == 'windows-x64' }}
+
+      # ── Rename and checksum ───────────────────────────────────────────────────
+      - name: Rename binary and generate SHA-256
+        run: |
+          cp "${{ matrix.binary_src }}" "${{ matrix.binary_dst }}"
+
+          # Generate a sidecar checksum file (platform-portable sha256sum / shasum)
+          if command -v sha256sum &>/dev/null; then
+            sha256sum "${{ matrix.binary_dst }}" > "${{ matrix.binary_dst }}.sha256"
+          else
+            shasum -a 256 "${{ matrix.binary_dst }}" > "${{ matrix.binary_dst }}.sha256"
+          fi
+
+          echo "--- Binary ---"
+          ls -lh "${{ matrix.binary_dst }}"
+          echo "--- Checksum ---"
+          cat "${{ matrix.binary_dst }}.sha256"
+        shell: bash
+
+      # ── Upload artifact ───────────────────────────────────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.binary_dst }}
+          path: |
+            ${{ matrix.binary_dst }}
+            ${{ matrix.binary_dst }}.sha256
+          if-no-files-found: error
+
+  # ── Create GitHub Release ─────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout (for git log) ────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Download all platform artifacts ───────────────────────────────────────
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true  # flatten into a single directory
+
+      - name: List release assets
+        run: ls -lh release-assets/
+
+      # ── Validate that this run is for a version tag ───────────────────────────
+      # Protects against accidentally running via workflow_dispatch on a branch ref.
+      - name: Validate tag ref
+        run: |
+          if [[ "$GITHUB_REF_NAME" != v* ]]; then
+            echo "::error::Release workflow must be run from a version tag (vX.Y.Z)."
+            echo "::error::Current ref: $GITHUB_REF_NAME"
+            echo "::error::Use 'gh workflow run release.yml --ref vX.Y.Z' or push the tag manually."
+            exit 1
+          fi
+          echo "✓ Running for tag: $GITHUB_REF_NAME"
+
+      # ── Extract version and generate release notes ────────────────────────────
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
+          echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Find the previous tag to build a changelog range
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          if [[ -n "$PREV_TAG" ]]; then
+            RANGE="${PREV_TAG}..HEAD"
+            echo "Changelog: $RANGE"
+          else
+            RANGE="HEAD"
+            echo "No previous tag found — using full history"
+          fi
+
+          COMMITS=$(git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges)
+
+          {
+            echo "notes<<EOF"
+            echo "$COMMITS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # ── Create release ────────────────────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "ws-manager v${{ steps.version.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          # Tags containing a hyphen (e.g. v1.0.0-rc.1) are marked pre-release
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            ## ws-manager v${{ steps.version.outputs.version }}
+
+            ### Changes
+            ${{ steps.notes.outputs.notes }}
+
+            ---
+
+            ### Installation
+
+            Download the binary for your platform, make it executable, and place it on your `$PATH`.
+
+            **macOS — Apple Silicon (arm64)**
+            ```bash
+            curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-macos-arm64
+            chmod +x ws
+            sudo mv ws /usr/local/bin/ws
+            ```
+
+            **macOS — Intel (x64)**
+            ```bash
+            curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-macos-x64
+            chmod +x ws
+            sudo mv ws /usr/local/bin/ws
+            ```
+
+            **Linux — x86_64**
+            ```bash
+            curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-linux-x64
+            chmod +x ws
+            sudo mv ws /usr/local/bin/ws
+            ```
+
+            **Linux — arm64**
+            ```bash
+            curl -fsSL -o ws https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/ws-linux-arm64
+            chmod +x ws
+            sudo mv ws /usr/local/bin/ws
+            ```
+
+            **Windows — x64**
+            Download `ws-windows-x64.exe`, rename it to `ws.exe`, and add its directory to `%PATH%`.
+
+            ---
+
+            ### Verify checksum
+            Each binary has a companion `.sha256` file. After downloading:
+            ```bash
+            sha256sum -c ws-linux-x64.sha256
+            ```
+
+          files: release-assets/*
