@@ -108,7 +108,8 @@ kotlin {
 // On Linux `strip -s` removes everything safely from a self-contained executable.
 val stripReleaseExecutable by tasks.registering(Exec::class) {
     val hostOs = System.getProperty("os.name")
-    val binaryName = "ws.kexe"
+    // Kotlin/Native produces .exe on Windows/MinGW, .kexe on macOS and Linux
+    val binaryName = if (hostOs.startsWith("Windows")) "ws.exe" else "ws.kexe"
     val binaryPath = layout.buildDirectory
         .file("bin/native/releaseExecutable/$binaryName")
         .get().asFile

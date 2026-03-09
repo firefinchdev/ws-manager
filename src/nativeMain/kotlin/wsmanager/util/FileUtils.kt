@@ -85,7 +85,7 @@ object FileUtils {
                 "$current/$part"
             }
             if (!exists(current)) {
-                mkdir(current, 0b111_101_101u) // 0755
+                platformMkdir(current) // delegates to per-platform impl (mode 0755 on POSIX)
             }
         }
     }
@@ -102,14 +102,7 @@ object FileUtils {
     /**
      * Get current working directory.
      */
-    fun getCurrentDirectory(): String {
-        return memScoped {
-            val bufferSize = 4096
-            val buffer = allocArray<ByteVar>(bufferSize)
-            getcwd(buffer, bufferSize.toULong())
-            buffer.toKString()
-        }
-    }
+    fun getCurrentDirectory(): String = platformGetCurrentDir()
 
     /**
      * Delete a file.

@@ -31,13 +31,20 @@ data class ProcessResult(
 }
 
 /**
- * Cross-platform process execution using POSIX fork()/exec()/waitpid().
+ * Cross-platform process execution.
  *
- * Deliberately avoids system() because system() sets SIGINT to SIG_IGN in the
- * parent process while the child runs. This means pressing Ctrl+C kills the
- * child git process but leaves the parent CLI running. With fork()/exec(), the
- * parent's signal disposition is never modified, so SIGINT reaches the parent
- * normally and the signal handler in Main.kt can exit immediately.
+ * POSIX (macOS / Linux): fork() + execv("/bin/sh -c") + waitpid()
+ *   — parent's SIGINT disposition is never modified, so Ctrl+C in the
+ *     terminal terminates the CLI immediately via Main.kt's signal handler.
+ *
+ * Windows (MinGW): system() via cmd.exe
+ *   — cmd.exe handles the &&-chained command with stdout/stderr redirected
+ *     to temp files.  SIGINT on Windows is delivered to all console
+ *     processes; Main.kt's signal handler calls exit(130).
+ *
+ * The per-platform implementation lives in each platform source directory
+ * via platformSpawnAndWait(), platformShellEscape(), platformCdCommand(),
+ * and platformTempDir().
  */
 object ProcessRunner {
 
@@ -53,62 +60,29 @@ object ProcessRunner {
         environment: Map<String, String> = emptyMap()
     ): ProcessResult {
         val cmdString = buildCommandString(command, workingDir, environment)
-        return forkExecShell(cmdString)
+        return spawnAndCapture(cmdString)
     }
 
     /**
      * Execute a raw shell command string.
      */
-    fun executeShell(command: String): ProcessResult = forkExecShell(command)
+    fun executeShell(command: String): ProcessResult = spawnAndCapture(command)
 
     /**
-     * Core implementation: fork a child process, exec `sh -c <command>` with
-     * stdout/stderr redirected to temp files, then waitpid() for the result.
-     *
-     * Unlike system(), this does NOT mask SIGINT in the parent, so Ctrl+C
-     * terminates the CLI immediately.
+     * Core implementation: build a shell command that redirects stdout/stderr
+     * to temp files, then delegate to the platform-specific spawn function.
      */
-    private fun forkExecShell(command: String): ProcessResult {
-        val tag = "${getpid()}_${clock()}"
-        val stdoutPath = "/tmp/wsm_out_$tag"
-        val stderrPath = "/tmp/wsm_err_$tag"
+    private fun spawnAndCapture(command: String): ProcessResult {
+        val tag    = "${getpid()}_${clock()}"
+        val tmpDir = platformTempDir()
+        val stdoutPath = "$tmpDir/wsm_out_$tag"
+        val stderrPath = "$tmpDir/wsm_err_$tag"
 
-        // Embed I/O redirection in the shell command; the child `sh` handles it.
+        // Redirect stdout and stderr to temp files inside the shell command.
+        // Both POSIX sh and Windows cmd.exe support > and 2> redirection.
         val shellCmd = "$command >$stdoutPath 2>$stderrPath"
 
-        val pid = fork()
-
-        // ---- CHILD PROCESS ----
-        if (pid == 0) {
-            memScoped {
-                val argv = allocArray<CPointerVar<ByteVar>>(4)
-                argv[0] = "sh".cstr.getPointer(this)
-                argv[1] = "-c".cstr.getPointer(this)
-                argv[2] = shellCmd.cstr.getPointer(this)
-                argv[3] = null
-                execv("/bin/sh", argv)
-            }
-            // execv only returns on error; terminate the child immediately.
-            exit(127)
-            // Unreachable — satisfies Kotlin's control-flow analysis.
-            @Suppress("UNREACHABLE_CODE")
-            return ProcessResult(127, "", "execv failed")
-        }
-
-        // ---- FORK FAILED ----
-        if (pid < 0) {
-            return ProcessResult(-1, "", "fork() failed")
-        }
-
-        // ---- PARENT PROCESS ----
-        // Wait for the child.  waitpid() is interrupted by SIGINT (errno=EINTR),
-        // at which point our signal handler in Main.kt calls exit(130).
-        val exitCode = memScoped {
-            val statusVar = alloc<IntVar>()
-            waitpid(pid, statusVar.ptr, 0)
-            // Equivalent to WEXITSTATUS(status): extract the 8-bit exit code.
-            (statusVar.value shr 8) and 0xFF
-        }
+        val exitCode = platformSpawnAndWait(shellCmd)
 
         val stdout = FileUtils.readFile(stdoutPath) ?: ""
         val stderr = FileUtils.readFile(stderrPath) ?: ""
@@ -120,6 +94,8 @@ object ProcessRunner {
 
     /**
      * Build a shell command string with optional cd and env-var prefixes.
+     * Uses platform-appropriate cd command and quoting via platformCdCommand()
+     * and platformShellEscape().
      */
     private fun buildCommandString(
         command: List<String>,
@@ -129,26 +105,25 @@ object ProcessRunner {
         val parts = mutableListOf<String>()
 
         if (workingDir != null) {
-            parts.add("cd ${shellEscape(workingDir)}")
+            // platformCdCommand handles `cd` syntax differences:
+            //   POSIX  → cd '/path/to/repo'
+            //   Windows → cd /D "D:\path\to\repo"
+            parts.add(platformCdCommand(workingDir))
         }
 
         for ((key, value) in environment) {
-            parts.add("export ${shellEscape(key)}=${shellEscape(value)}")
+            parts.add("export ${platformShellEscape(key)}=${platformShellEscape(value)}")
         }
 
-        val escapedCommand = command.joinToString(" ") { shellEscape(it) }
+        val escapedCommand = command.joinToString(" ") { platformShellEscape(it) }
         parts.add(escapedCommand)
 
         return parts.joinToString(" && ")
     }
 
     /**
-     * Escape a string for safe shell usage by wrapping in single quotes.
-     * Prevents injection when user input is passed to the shell.
+     * Escape a string for safe shell usage.
+     * Delegates to the platform-specific implementation.
      */
-    fun shellEscape(input: String): String {
-        if (input.isEmpty()) return "''"
-        if (input.all { it.isLetterOrDigit() || it in "/-_.=@:" }) return input
-        return "'" + input.replace("'", "'\\''") + "'"
-    }
+    fun shellEscape(input: String): String = platformShellEscape(input)
 }
