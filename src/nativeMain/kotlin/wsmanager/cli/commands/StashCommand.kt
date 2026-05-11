@@ -15,6 +15,11 @@ class StashCommand : Command {
     override val description = "Stash operations across all repositories"
     override val usage = "ws stash [push|pop|list|drop] [--message <msg>]"
 
+    companion object {
+        /** Prefix used to identify stash entries created by ws-manager */
+        const val WS_STASH_PREFIX = "ws-manager: "
+    }
+
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()
         val repos = config.repositories
@@ -38,7 +43,8 @@ class StashCommand : Command {
         context: CommandContext,
         args: List<String>
     ): Int {
-        val message = getArgValue(args, "--message") ?: getArgValue(args, "-m")
+        val userMessage = getArgValue(args, "--message") ?: getArgValue(args, "-m")
+        val stashMessage = WS_STASH_PREFIX + (userMessage ?: "ws stash push")
 
         Printer.operationStart("Stash push", repos.size)
 
@@ -59,9 +65,9 @@ class StashCommand : Command {
                 }
 
                 if (context.git.isClean(repoPath)) {
-                    wsmanager.git.GitResult.success("No local changes to save")
+                    wsmanager.git.GitResult.success("No local changes to save (skipped)")
                 } else {
-                    context.git.stash(repoPath, message)
+                    context.git.stash(repoPath, stashMessage)
                 }
             },
             rollback = { repo, hadChanges ->
@@ -113,7 +119,13 @@ class StashCommand : Command {
                 if (stashList.success && stashList.output.isBlank()) {
                     wsmanager.git.GitResult.success("No stash entries")
                 } else {
-                    context.git.stashPop(repoPath)
+                    // Only pop if the top stash entry was created by ws-manager
+                    val topEntry = stashList.output.lines().firstOrNull() ?: ""
+                    if (!topEntry.contains(WS_STASH_PREFIX)) {
+                        wsmanager.git.GitResult.success("Top stash not created by ws-manager, skipped")
+                    } else {
+                        context.git.stashPop(repoPath)
+                    }
                 }
             },
             rollback = { repo, _ ->
