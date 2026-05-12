@@ -9,27 +9,37 @@ import wsmanager.util.FileUtils
 /**
  * Merge a branch across all repositories.
  * Uses ATOMIC strategy (write operation with rollback capability).
+ *
+ * Flags:
+ *   --default, -d   Merge each repo's own defaultBranch (as set in workspace.json)
+ *                   into the current branch. No branch name argument is required.
+ *   --no-ff         Create a merge commit even when fast-forward is possible.
+ *   --message, -m   Use the given message for the merge commit.
  */
 class MergeCommand : Command {
     override val name = "merge"
     override val description = "Merge a branch across all repositories"
-    override val usage = "ws merge <branch> [--no-ff] [--message <msg>]"
+    override val usage = "ws merge <branch> [--no-ff] [--message <msg>]\n" +
+            "       ws merge --default|-d [--no-ff] [--message <msg>]"
 
     override suspend fun execute(args: List<String>, context: CommandContext): Int {
         val config = context.requireConfig()
         val noFf = args.contains("--no-ff")
+        val defaultFlag = args.contains("--default") || args.contains("-d")
         val message = getArgValue(args, "--message") ?: getArgValue(args, "-m")
         val branchArgs = args.filter { !it.startsWith("-") && it != message }
 
-        if (branchArgs.isEmpty()) {
-            Printer.error("Branch name required. Usage: $usage")
+        if (!defaultFlag && branchArgs.isEmpty()) {
+            Printer.error("Branch name required, or use --default to merge each repo's default branch.")
+            Printer.info("Usage: $usage")
             return 1
         }
 
-        val branch = branchArgs.first()
+        val fixedBranch = if (defaultFlag) null else branchArgs.first()
         val repos = config.repositories
 
-        Printer.operationStart("Merge '$branch'", repos.size)
+        val operationLabel = if (defaultFlag) "Merge default branch" else "Merge '$fixedBranch'"
+        Printer.operationStart(operationLabel, repos.size)
 
         val operation = RepoOperation<String>(
             name = "merge",
@@ -42,6 +52,7 @@ class MergeCommand : Command {
             },
             execute = { repo ->
                 val repoPath = context.resolveRepoPath(repo)
+                val branch = fixedBranch ?: repo.defaultBranch
 
                 if (!FileUtils.isDirectory(repoPath) || !context.git.isGitRepository(repoPath)) {
                     return@RepoOperation wsmanager.git.GitResult.failure("Repository not found at $repoPath")
@@ -70,7 +81,7 @@ class MergeCommand : Command {
         )
 
         val result = context.engine.executeAtomic(
-            operationName = "merge",
+            operationName = operationLabel,
             repositories = repos,
             operation = operation,
             onProgress = { _, result -> Printer.repoResult(result) }

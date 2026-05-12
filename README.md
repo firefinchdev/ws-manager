@@ -63,6 +63,7 @@
 - **`describe`** &mdash; inspect the full workspace config: repos, remotes, aliases, clone status, all in one view
 - **`refresh`** &mdash; one-command "clean slate" for starting a new task: discard changes, checkout default branches, sync remotes, pull latest
 - **`checkout --default`** &mdash; each repo checks out its own configured default branch
+- **`merge --default`** &mdash; each repo merges its own configured default branch into the current branch
 - **`open`** &mdash; open any repository in the browser; supports GitHub, GitLab, Bitbucket, Azure DevOps, and self-hosted providers
 - **Colored terminal output** with progress indicators and structured summaries
 - **Shell command execution** across all repos via `foreach`
@@ -811,12 +812,14 @@ Merge a branch into the current branch across all repositories.
 
 ```
 ws merge <branch> [--no-ff] [--message <msg>]
+ws merge --default|-d [--no-ff] [--message <msg>]
 ```
 
 | Option | Short | Description |
 |---|---|---|
 | `--no-ff` | | Create a merge commit even for fast-forward merges |
 | `--message <msg>` | `-m` | Custom merge commit message |
+| `--default` | `-d` | Merge each repo's own `default_branch` (as set in `workspace.json`) into the current branch. No branch name argument needed |
 
 **Strategy:** ATOMIC
 
@@ -828,6 +831,14 @@ ws merge develop
 
 # Merge with no-ff and custom message
 ws merge feature/auth --no-ff --message "Merge auth feature"
+
+# Merge each repo's configured default branch into the current branch
+# (repo-a merges main, repo-b merges develop, etc.)
+ws merge --default
+ws merge -d
+
+# Merge default branches with no-ff
+ws merge --default --no-ff
 ```
 
 ---
